@@ -1,0 +1,6 @@
+{
+  "name": "Fairway",
+  "description": "Tactile athletic golf performance, hole-by-hole round prep, and season recap journal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
