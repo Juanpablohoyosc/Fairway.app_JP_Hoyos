@@ -222,7 +222,9 @@ dialog::backdrop{background:rgba(20,8,11,.6)}
     <p>Press <kbd>Y=</kbd> and type a function using <kbd>X,T,θ,n</kbd>, then <kbd>GRAPH</kbd>. <kbd>TRACE</kbd> walks along the curve, <kbd>ZOOM</kbd> changes the view, and <kbd>WINDOW</kbd> sets the range. <kbd class="k2">2nd</kbd> <kbd>TRACE</kbd> finds zeros, minimums, maximums and intersections, and <kbd class="k2">2nd</kbd> <kbd>GRAPH</kbd> shows a table.</p>
 
     <h2>Stats for the season</h2>
-    <p><kbd>STAT</kbd> <kbd>1</kbd> opens the list editor. Enter your sprint times, lifts or shooting percentages in L₁ and L₂. Then <kbd>STAT</kbd> <kbd>▶</kbd> CALC gives you 1-Var Stats, 2-Var Stats and regressions. <kbd class="k2">2nd</kbd> <kbd>Y=</kbd> turns on a scatter plot, and <kbd class="k2">2nd</kbd> <kbd>VARS</kbd> has the normal, binomial and Poisson distributions.</p>
+    <p><kbd>STAT</kbd> <kbd>1</kbd> opens the list editor. Enter your sprint times, lifts or shooting percentages in L₁ and L₂, or move up onto a list name and type a formula such as <code>L₁*2</code>. <kbd class="k2">2nd</kbd> <kbd>DEL</kbd> inserts a value.</p>
+    <p><kbd>STAT</kbd> <kbd>▶</kbd> <b>CALC</b> has 1-Var and 2-Var Stats and every regression: Med-Med, linear, quadratic, cubic, quartic, ln, exponential, power, logistic and sine. Add <code>,Y₁</code> at the end to store the equation for graphing. <kbd>STAT</kbd> <kbd>▶</kbd> <kbd>▶</kbd> <b>TESTS</b> opens fill-in screens for Z and T tests, 2-sample tests, proportion tests, confidence intervals, χ² tests, the F test, LinRegTTest and ANOVA. Use <kbd>◀</kbd> <kbd>▶</kbd> to pick options, then choose Calculate.</p>
+    <p class="small"><kbd class="k2">2nd</kbd> <kbd>Y=</kbd> sets up three stat plots (scatter, line, histogram and box plots). <kbd>ZOOM</kbd> ZoomStat fits them to the screen, and <kbd>TRACE</kbd> steps through the points. <kbd class="k2">2nd</kbd> <kbd>VARS</kbd> has the normal, t, χ², F, binomial, Poisson and geometric distributions, with shaded graphs under DRAW. <kbd>VARS</kbd> <kbd>2</kbd> pastes results such as x̄, Sx, r or p into your own formulas.</p>
 
     <h2>Everything else</h2>
     <p><kbd>MATH</kbd>, <kbd class="k2">2nd</kbd> <kbd>x⁻¹</kbd> matrices, <kbd class="k2">2nd</kbd> <kbd>STAT</kbd> list tools, <kbd class="k2">2nd</kbd> <kbd>APPS</kbd> angles, <kbd>PRGM</kbd> short programs, <kbd class="k2">2nd</kbd> <kbd>PRGM</kbd> drawing, <kbd class="k2">2nd</kbd> <kbd>STO→</kbd> recall, and <kbd>MODE</kbd> for decimals, notation and degrees. <kbd class="k2">2nd</kbd> <kbd>0</kbd> opens the catalog of every function.</p>
@@ -267,7 +269,7 @@ const DISP={neg:'⁻',inv:'⁻¹',EE:'ᴇ',econst:'e',L1:'L₁',L2:'L₂',L3:'L�
   fN:'N','fI%':'I%',fPV:'PV',fPMT:'PMT',fFV:'FV','fP/Y':'P/Y','fC/Y':'C/Y',nPr:' nPr ',nCr:' nCr ',xroot:'ˣ√',
   Y1:'Y₁',Y2:'Y₂',Y3:'Y₃',Y4:'Y₄',mA:'[A]',mB:'[B]',mC:'[C]',deg:'°',rad:'ʳ',tr:'ᵀ',
   wXmin:'Xmin',wXmax:'Xmax',wXscl:'Xscl',wYmin:'Ymin',wYmax:'Ymax',wYscl:'Yscl'};
-const disp=t=>DISP[t]??t;
+const disp=t=>DISP[t]??(typeof t==='string'&&t.startsWith('st:')?t.slice(3):t);
 const isList=Array.isArray;
 const isMat=v=>v!=null&&typeof v==='object'&&Array.isArray(v.m);
 const isLetter=k=>typeof k==='string'&&/^[A-Zθuvw]$/.test(k);
@@ -284,7 +286,7 @@ const S={screen:'home',power:true,shift:null,alock:false,insert:false,
   vars:{},lists:{},tvm:defTVM(),modes:defModes(),contrast:0,
   menu:null,err:null,tvmRow:0,tvmEdit:null,tvmSolved:null,tvmOpt:0,modeRow:0,modeCol:[0,0,0],opt:'mode',
   yf:[[],[],[],[]],yon:[true,true,true,true],yRow:0,yEd:null,yEq:false,
-  win:defWin(),tblset:{start:0,step:1},fmt:defFmt(),splot:false,draws:[],prgms:{},mats:{},
+  win:defWin(),tblset:{start:0,step:1},fmt:defFmt(),plots:null,draws:[],prgms:{},mats:{},stat:{},tp:null,
   form:null,gcur:null,trace:null,tbl:{top:0,row:0,col:0},led:{col:0,left:0,row:0,top:0,ed:null},
   info:null,pname:'',ped:null,rcl:false,_graph:false};
 
@@ -597,6 +599,61 @@ function binPmf(n,p,k,lf){
   return Math.exp(lf[n]-lf[k]-lf[n-k]+k*Math.log(p)+(n-k)*Math.log1p(-p));
 }
 function poisPmf(mu,k){ if(!Number.isInteger(k)||k<0) return 0; if(mu===0) return k===0?1:0; return Math.exp(-mu+k*Math.log(mu)-lnFact(k)); }
+/* ---- special functions for the t, χ² and F distributions ---- */
+function lgam(x){
+  const c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(x<0.5) return Math.log(Math.PI/Math.abs(Math.sin(Math.PI*x)))-lgam(1-x);
+  x-=1; let a=c[0]; const t=x+7.5; for(let i=1;i<9;i++) a+=c[i]/(x+i);
+  return 0.5*Math.log(2*Math.PI)+(x+0.5)*Math.log(t)-t+Math.log(a);
+}
+// regularized incomplete gamma: [P(a,x), Q(a,x)]
+function gammaPQ(a,x){
+  if(x<=0) return [0,1];
+  const lf=-x+a*Math.log(x)-lgam(a);
+  if(x<a+1){ let s=1/a,t=s; for(let n=1;n<2000;n++){ t*=x/(a+n); s+=t; if(Math.abs(t)<Math.abs(s)*1e-17) break; } const P=Math.min(1,s*Math.exp(lf)); return [P,1-P]; }
+  let b=x+1-a,c=1e300,d=1/b,h=d;
+  for(let i=1;i<2000;i++){ const an=-i*(i-a); b+=2; d=an*d+b; if(Math.abs(d)<1e-300) d=1e-300; c=b+an/c; if(Math.abs(c)<1e-300) c=1e-300; d=1/d; const del=d*c; h*=del; if(Math.abs(del-1)<1e-16) break; }
+  const Q=Math.min(1,Math.exp(lf)*h); return [1-Q,Q];
+}
+function betacf(a,b,x){
+  const FP=1e-300, qab=a+b, qap=a+1, qam=a-1; let c=1, d=1-qab*x/qap; if(Math.abs(d)<FP) d=FP; d=1/d; let h=d;
+  for(let m=1;m<=2000;m++){
+    const m2=2*m; let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<FP) d=FP; c=1+aa/c; if(Math.abs(c)<FP) c=FP; d=1/d; const del=d*c; h*=del;
+    if(Math.abs(del-1)<1e-16) break;
+  }
+  return h;
+}
+function ibeta(x,a,b){
+  if(x<=0) return 0; if(x>=1) return 1;
+  const bt=Math.exp(lgam(a+b)-lgam(a)-lgam(b)+a*Math.log(x)+b*Math.log1p(-x));
+  return x<(a+1)/(a+b+2)?bt*betacf(a,b,x)/a:1-bt*betacf(b,a,1-x)/b;
+}
+const tUp=(t,df)=>{ if(t===Infinity) return 0; if(t===-Infinity) return 1; const tail=0.5*ibeta(df/(df+t*t),df/2,0.5); return t>=0?tail:1-tail; };
+const tCdf=(t,df)=>t<0?tUp(-t,df):1-tUp(t,df);
+const chiUp=(x,df)=>x<=0?1:gammaPQ(df/2,x/2)[1];
+const chiLo=(x,df)=>x<=0?0:gammaPQ(df/2,x/2)[0];
+const fUp=(x,d1,d2)=>x<=0?1:x===Infinity?0:ibeta(d2/(d2+d1*x),d2/2,d1/2);
+function tpdf(x,df){ return Math.exp(lgam((df+1)/2)-lgam(df/2)-0.5*Math.log(df*Math.PI)-(df+1)/2*Math.log1p(x*x/df)); }
+function chipdf(x,df){ if(x<0) return 0; if(x===0) return df<2?Infinity:df===2?0.5:0; return Math.exp((df/2-1)*Math.log(x)-x/2-(df/2)*Math.LN2-lgam(df/2)); }
+function fpdf(x,d1,d2){ if(x<0) return 0; if(x===0) return d1<2?Infinity:d1===2?1:0;
+  return Math.exp(0.5*(d1*Math.log(d1*x)+d2*Math.log(d2)-(d1+d2)*Math.log(d1*x+d2))-Math.log(x)-(lgam(d1/2)+lgam(d2/2)-lgam((d1+d2)/2))); }
+const normpdf=(x,mu,sg)=>Math.exp(-0.5*((x-mu)/sg)**2)/(sg*Math.sqrt(2*Math.PI));
+function invT(p,df){
+  let lo=-1,hi=1;
+  for(let k=0;k<80&&tCdf(lo,df)>p;k++) lo*=2;
+  for(let k=0;k<80&&tCdf(hi,df)<p;k++) hi*=2;
+  for(let k=0;k<300;k++){ const m=(lo+hi)/2; if(m===lo||m===hi) break; if(tCdf(m,df)<p) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+const ALT={ne:'≠',lt:'<',gt:'>'};
+const pZ=(z,alt)=>alt==='ne'?erfc(Math.abs(z)/SQ2):alt==='lt'?0.5*erfc(-z/SQ2):0.5*erfc(z/SQ2);
+const pT=(t,df,alt)=>alt==='ne'?Math.min(1,2*tUp(Math.abs(t),df)):alt==='lt'?tUp(-t,df):tUp(t,df);
+const pF=(F,d1,d2,alt)=>{ const u=fUp(F,d1,d2); return alt==='gt'?u:alt==='lt'?1-u:Math.min(1,2*Math.min(u,1-u)); };
+
+/* ---- descriptive statistics ---- */
 function median(a){ const n=a.length; const m=Math.floor(n/2); return n%2?a[m]:(a[m-1]+a[m])/2; }
 function listOf(v){ if(!isList(v)||!v.length) err('DATA TYPE'); return v; }
 function resolveList(x){
@@ -604,67 +661,405 @@ function resolveList(x){
   if(isList(x)&&x.length) return x;
   err('DATA TYPE');
 }
-function oneVar(X,F){
-  const w=F||X.map(()=>1); let n=0,sx=0,sx2=0;
-  X.forEach((x,i)=>{ if(w[i]<0) err('DOMAIN'); n+=w[i]; sx+=x*w[i]; sx2+=x*x*w[i]; });
+function freqList(f,n){
+  const F=f&&f.name?resolveList(f):isList(f)?f:Array(n).fill(num(f));
+  if(F.length!==n) err('DIM MISMATCH');
+  F.forEach(x=>{ if(!(x>=0)) err('DOMAIN'); });
+  return F;
+}
+function wStats(L,F){
+  const w=F||L.map(()=>1); let n=0,s=0,s2=0;
+  L.forEach((x,i)=>{ if(!(w[i]>=0)) err('DOMAIN'); n+=w[i]; s+=w[i]*x; s2+=w[i]*x*x; });
   if(n<=0) err('DOMAIN');
-  const mean=sx/n, ss=Math.max(0,sx2-sx*mean);
-  const lines=['1-Var Stats','x̄='+fmtNum(mean),'Σx='+fmtNum(sx),'Σx²='+fmtNum(sx2),'Sx='+(n>1?fmtNum(Math.sqrt(ss/(n-1))):''),'σx='+fmtNum(Math.sqrt(ss/n)),'n='+fmtNum(n)];
-  let arr=null;
-  if(!F) arr=X.slice(); else if(F.every(Number.isInteger)&&n<=99999){ arr=[]; X.forEach((x,i)=>{ for(let k=0;k<w[i];k++) arr.push(x); }); }
-  if(arr&&arr.length){
-    arr.sort((a,b)=>a-b); const h=Math.floor(arr.length/2);
-    const lo=arr.slice(0,h), hi=arr.slice(arr.length%2?h+1:h);
-    lines.push('minX='+fmtNum(arr[0]),'Q₁='+(lo.length?fmtNum(median(lo)):''),'Med='+fmtNum(median(arr)),'Q₃='+(hi.length?fmtNum(median(hi)):''),'maxX='+fmtNum(arr[arr.length-1]));
-  }
-  return lines;
+  const mean=s/n; let ss=0; L.forEach((x,i)=>{ ss+=w[i]*(x-mean)**2; });
+  return {n,sum:s,sum2:s2,mean,ss,sx:n>1?Math.sqrt(ss/(n-1)):NaN,sig:Math.sqrt(ss/n)};
 }
-function twoVar(X,Y){
+function expandFreq(L,F){
+  if(!F) return L.slice();
+  if(!F.every(Number.isInteger)) return null;
+  const o=[]; L.forEach((x,i)=>{ for(let k=0;k<F[i];k++) o.push(x); });
+  return o.length>99999?null:o;
+}
+function fiveNum(arr){
+  arr=arr.slice().sort((a,b)=>a-b); const h=Math.floor(arr.length/2);
+  const lo=arr.slice(0,h), hi=arr.slice(arr.length%2?h+1:h);
+  return {min:arr[0],q1:lo.length?median(lo):arr[0],med:median(arr),q3:hi.length?median(hi):arr[arr.length-1],max:arr[arr.length-1]};
+}
+const ONEVAR_KEYS=['x̄','Σx','Σx²','Sx','σx','n','minX','Q₁','Med','Q₃','maxX'];
+const TWOVAR_KEYS=[...ONEVAR_KEYS,'ȳ','Σy','Σy²','Sy','σy','Σxy','minY','maxY'];
+const REG_KEYS=['a','b','c','d','e','r','r²','R²','RegEQ'];
+const TEST_KEYS=['p','z','t','χ²','F','df','p̂','p̂₁','p̂₂','s','x̄₁','x̄₂','Sx₁','Sx₂','Sxp','n₁','n₂','lower','upper'];
+function setStat(vals,clear){
+  (clear||[]).forEach(k=>delete S.stat[k]);
+  Object.entries(vals).forEach(([k,v])=>{ if(Array.isArray(v)||(typeof v==='number'&&isFinite(v))) S.stat[k]=v; });
+}
+const statLine=(k,v)=>k+'='+(typeof v==='number'&&isFinite(v)?fmtNum(v):'');
+function oneVar(X,F){
+  const s=wStats(X,F), e=expandFreq(X,F), f=e&&e.length?fiveNum(e):null;
+  const v={'x̄':s.mean,'Σx':s.sum,'Σx²':s.sum2,'Sx':s.sx,'σx':s.sig,'n':s.n};
+  if(f) Object.assign(v,{minX:f.min,'Q₁':f.q1,Med:f.med,'Q₃':f.q3,maxX:f.max});
+  setStat(v,ONEVAR_KEYS);
+  return ['1-Var Stats',...Object.keys(v).map(k=>statLine(k,v[k]))];
+}
+function twoVar(X,Y,F){
   if(X.length!==Y.length) err('DIM MISMATCH');
-  const n=X.length; let sx=0,sy=0,sxx=0,syy=0,sxy=0;
-  X.forEach((x,i)=>{ const y=Y[i]; sx+=x; sy+=y; sxx+=x*x; syy+=y*y; sxy+=x*y; });
-  const vx=Math.max(0,sxx-sx*sx/n), vy=Math.max(0,syy-sy*sy/n);
-  const sd=(v,d)=>d>0?fmtNum(Math.sqrt(v/d)):'';
-  return ['2-Var Stats','x̄='+fmtNum(sx/n),'Σx='+fmtNum(sx),'Σx²='+fmtNum(sxx),'Sx='+sd(vx,n-1),'σx='+sd(vx,n),
-    'ȳ='+fmtNum(sy/n),'Σy='+fmtNum(sy),'Σy²='+fmtNum(syy),'Sy='+sd(vy,n-1),'σy='+sd(vy,n),'Σxy='+fmtNum(sxy),'n='+n,
-    'minX='+fmtNum(Math.min(...X)),'maxX='+fmtNum(Math.max(...X)),'minY='+fmtNum(Math.min(...Y)),'maxY='+fmtNum(Math.max(...Y))];
+  const sx=wStats(X,F), sy=wStats(Y,F), w=F||X.map(()=>1);
+  let sxy=0; X.forEach((x,i)=>{ sxy+=w[i]*x*Y[i]; });
+  const use=X.map((_,i)=>w[i]>0), xs=X.filter((_,i)=>use[i]), ys=Y.filter((_,i)=>use[i]);
+  const v={'x̄':sx.mean,'Σx':sx.sum,'Σx²':sx.sum2,'Sx':sx.sx,'σx':sx.sig,'ȳ':sy.mean,'Σy':sy.sum,'Σy²':sy.sum2,'Sy':sy.sx,'σy':sy.sig,'Σxy':sxy,'n':sx.n,
+    minX:Math.min(...xs),maxX:Math.max(...xs),minY:Math.min(...ys),maxY:Math.max(...ys)};
+  setStat(v,TWOVAR_KEYS);
+  return ['2-Var Stats',...Object.keys(v).map(k=>statLine(k,v[k]))];
 }
-function linFit(xs,ys){
-  const m=xs.length; if(m<2) err('DIM MISMATCH');
-  let sx=0,sy=0,sxx=0,sxy=0,syy=0; xs.forEach((x,i)=>{ const y=ys[i]; sx+=x;sy+=y;sxx+=x*x;sxy+=x*y;syy+=y*y; });
-  const dx=m*sxx-sx*sx; if(dx===0) err('DIVIDE BY 0');
-  const A=(m*sxy-sx*sy)/dx, B=(sy-A*sx)/m, dy=m*syy-sy*sy;
-  return {A,B,r:dy===0?NaN:(m*sxy-sx*sy)/Math.sqrt(dx*dy)};
+
+/* ---- regressions ---- */
+function solveLin(A,b){
+  const n=b.length, M=A.map((r,i)=>[...r,b[i]]);
+  let scale=0; A.forEach(r=>r.forEach(v=>{ scale=Math.max(scale,Math.abs(v)); }));
+  for(let i=0;i<n;i++){
+    let p=i; for(let k=i+1;k<n;k++) if(Math.abs(M[k][i])>Math.abs(M[p][i])) p=k;
+    if(!(Math.abs(M[p][i])>1e-13*scale)) return null;
+    [M[p],M[i]]=[M[i],M[p]];
+    for(let k=0;k<n;k++) if(k!==i){ const f=M[k][i]/M[i][i]; if(f) for(let j=i;j<=n;j++) M[k][j]-=f*M[i][j]; }
+  }
+  return M.map((r,i)=>r[n]/r[i]);
 }
+// weighted least-squares polynomial; returns coefficients lowest power first
+function polyfit(X,Y,w,deg){
+  const m=deg+1; if(X.length<m) err('DIM MISMATCH');
+  let sw=0,sx=0; X.forEach((x,i)=>{ sw+=w[i]; sx+=w[i]*x; });
+  const mx=sx/sw; let sc=0; X.forEach(x=>{ sc=Math.max(sc,Math.abs(x-mx)); });
+  if(sc===0) err('SINGULAR MAT');
+  const A=Array.from({length:m},()=>Array(m).fill(0)), b=Array(m).fill(0);
+  X.forEach((x,i)=>{ const t=(x-mx)/sc, p=[1]; for(let k=1;k<m;k++) p.push(p[k-1]*t);
+    for(let j=0;j<m;j++){ b[j]+=w[i]*p[j]*Y[i]; for(let k=0;k<m;k++) A[j][k]+=w[i]*p[j]*p[k]; } });
+  const c=solveLin(A,b); if(!c) err('SINGULAR MAT');
+  const out=Array(m).fill(0);
+  for(let k=0;k<m;k++){ const ck=c[k]/Math.pow(sc,k); for(let j=0;j<=k;j++) out[j]+=ck*nCr(k,j)*Math.pow(-mx,k-j); }
+  const big=Math.max(...out.map(Math.abs));
+  return out.map(v=>Math.abs(v)<1e-11*big?0:v);
+}
+function wCorr(X,Y,w){
+  let n=0,sx=0,sy=0; X.forEach((x,i)=>{ n+=w[i]; sx+=w[i]*x; sy+=w[i]*Y[i]; });
+  const mx=sx/n, my=sy/n; let a=0,b=0,c=0;
+  X.forEach((x,i)=>{ const dx=x-mx, dy=Y[i]-my; a+=w[i]*dx*dy; b+=w[i]*dx*dx; c+=w[i]*dy*dy; });
+  return b>0&&c>0?Math.max(-1,Math.min(1,a/Math.sqrt(b*c))):NaN;
+}
+function lmFit(f,p0,X,Y,w){
+  let p=p0.slice(), lam=1e-3; const n=X.length, m=p.length;
+  const sse=q=>{ let s=0; for(let i=0;i<n;i++){ const r=Y[i]-f(X[i],q); s+=w[i]*r*r; } return s; };
+  let cur=sse(p); if(!isFinite(cur)) return null;
+  for(let it=0;it<300;it++){
+    const J=[],R=[];
+    for(let i=0;i<n;i++){ const fi=f(X[i],p); R.push(Y[i]-fi); const row=[];
+      for(let j=0;j<m;j++){ const h=1e-7*Math.max(1,Math.abs(p[j])), q=p.slice(); q[j]+=h; row.push((f(X[i],q)-fi)/h); } J.push(row); }
+    const A=Array.from({length:m},()=>Array(m).fill(0)), g=Array(m).fill(0);
+    for(let i=0;i<n;i++) for(let j=0;j<m;j++){ g[j]+=w[i]*J[i][j]*R[i]; for(let k=0;k<m;k++) A[j][k]+=w[i]*J[i][j]*J[i][k]; }
+    let improved=false, tiny=false;
+    for(let tries=0;tries<14;tries++){
+      const d=solveLin(A.map((r,j)=>r.map((v,k)=>j===k?v*(1+lam)+1e-15:v)),g);
+      if(!d){ lam*=10; continue; }
+      const q=p.map((v,j)=>v+d[j]), s=sse(q);
+      if(isFinite(s)&&s<cur){ tiny=(cur-s)<=1e-15*cur; p=q; cur=s; lam=Math.max(lam/10,1e-12); improved=true; break; }
+      lam*=10;
+    }
+    if(!improved||tiny) break;
+  }
+  return {p,sse:cur};
+}
+function medMed(X,Y){
+  const pts=X.map((x,i)=>[x,Y[i]]).sort((p,q)=>p[0]-q[0]), n=pts.length;
+  if(n<3) err('DIM MISMATCH');
+  const k=Math.floor(n/3), r=n%3, sz=r===0?[k,k,k]:r===1?[k,k+1,k]:[k+1,k,k+1];
+  const g=[pts.slice(0,sz[0]),pts.slice(sz[0],sz[0]+sz[1]),pts.slice(sz[0]+sz[1])];
+  const md=a=>median(a.slice().sort((u,v)=>u-v));
+  const M=g.map(G=>[md(G.map(p=>p[0])),md(G.map(p=>p[1]))]);
+  if(M[2][0]===M[0][0]) err('DIVIDE BY 0');
+  const a=(M[2][1]-M[0][1])/(M[2][0]-M[0][0]);
+  return {a,b:(M[0][1]+M[1][1]+M[2][1]-a*(M[0][0]+M[1][0]+M[2][0]))/3};
+}
+function logisticFit(X,Y,w){
+  if(X.length<3) err('DIM MISMATCH');
+  const f=(x,p)=>p[2]/(1+p[0]*Math.exp(-p[1]*x));
+  const ymax=Math.max(...Y), ymin=Math.min(...Y), starts=[];
+  if(ymin>0) for(const k of [1.01,1.05,1.2,1.5,2,3]){ const c0=ymax*k;
+    try{ const l=polyfit(X,Y.map(y=>Math.log(c0/y-1)),w,1); starts.push([Math.exp(l[0]),-l[1],c0]); }catch(e){} }
+  starts.push([1,1,ymax||1],[10,0.5,ymax||1]);
+  let best=null;
+  for(const s of starts){ if(!s.every(isFinite)) continue; const r=lmFit(f,s,X,Y,w); if(r&&isFinite(r.sse)&&(!best||r.sse<best.sse)) best=r; }
+  if(!best) err('SINGULAR MAT');
+  return best.p;
+}
+function sinFit(X,Y,period){
+  if(X.length<4) err('DIM MISMATCH');
+  const w=X.map(()=>1), span=Math.max(...X)-Math.min(...X); if(!(span>0)) err('DOMAIN');
+  const xs=X.slice().sort((a,b)=>a-b); let mind=Infinity;
+  for(let i=1;i<xs.length;i++) if(xs[i]>xs[i-1]) mind=Math.min(mind,xs[i]-xs[i-1]);
+  const bs=[];
+  if(period!=null){ if(!(period>0)) err('DOMAIN'); bs.push(2*Math.PI/period); }
+  else { const lo=Math.PI/span/2, hi=Math.PI/mind; for(let k=0;k<=400;k++) bs.push(lo*Math.pow(hi/lo,k/400)); }
+  let best=null;
+  for(const b of bs){
+    const A=[[0,0,0],[0,0,0],[0,0,0]], r=[0,0,0];
+    X.forEach((x,i)=>{ const p=[Math.sin(b*x),Math.cos(b*x),1]; for(let j=0;j<3;j++){ r[j]+=p[j]*Y[i]; for(let k=0;k<3;k++) A[j][k]+=p[j]*p[k]; } });
+    const c=solveLin(A,r); if(!c) continue;
+    let sse=0; X.forEach((x,i)=>{ sse+=(Y[i]-(c[0]*Math.sin(b*x)+c[1]*Math.cos(b*x)+c[2]))**2; });
+    if(!best||sse<best.sse) best={sse,p:[Math.hypot(c[0],c[1]),b,Math.atan2(c[1],c[0]),c[2]]};
+  }
+  if(!best) err('SINGULAR MAT');
+  const f=(x,p)=>p[0]*Math.sin(p[1]*x+p[2])+p[3];
+  const fit=lmFit(f,best.p,X,Y,w), p=fit&&fit.sse<=best.sse?fit.p:best.p;
+  if(p[1]<0){ p[1]=-p[1]; p[2]=Math.PI-p[2]; }
+  if(p[0]<0){ p[0]=-p[0]; p[2]+=Math.PI; }
+  p[2]=((p[2]+Math.PI)%(2*Math.PI)+2*Math.PI)%(2*Math.PI)-Math.PI;
+  return p;
+}
+function polyTokens(c){
+  const o=[];
+  for(let k=c.length-1;k>=0;k--){
+    if(o.length) o.push('+');
+    o.push(...numToTokens(c[k]));
+    if(k>=1) o.push('X'); if(k===2) o.push('²'); if(k===3) o.push('³'); if(k===4) o.push('^','4');
+  }
+  return o;
+}
+const REGS={medmed:'Med-Med',lin:'LinReg',lin2:'LinReg',quad:'QuadReg',cubic:'CubicReg',quart:'QuartReg',ln:'LnReg',exp:'ExpReg',pwr:'PwrReg',logistic:'Logistic',sin:'SinReg'};
 function regress(kind,a){
   const args=a.slice(); let yv=null;
   const last=args[args.length-1]; if(last&&last.name&&isYv(last.name)){ yv=last.name; args.pop(); }
-  const X=resolveList(args.length>0?args[0]:{name:'L1'}), Y=resolveList(args.length>1?args[1]:{name:'L2'});
+  if(args.length>3) err('ARGUMENT');
+  let X=resolveList(args.length>0?args[0]:{name:'L1'}), Y=resolveList(args.length>1?args[1]:{name:'L2'});
   if(X.length!==Y.length) err('DIM MISMATCH');
-  let lines, eq;
-  if(kind==='lin'){
-    const {A,B,r}=linFit(X,Y);
-    lines=['LinReg','y=ax+b','a='+fmtNum(A),'b='+fmtNum(B)]; if(!isNaN(r)) lines.push('r²='+fmtNum(r*r),'r='+fmtNum(r));
-    eq=[...numToTokens(A),'X','+',...numToTokens(B)];
-  } else if(kind==='exp'){
-    if(Y.some(y=>y<=0)) err('DOMAIN');
-    const {A,B,r}=linFit(X,Y.map(Math.log)); const a0=Math.exp(B), b0=Math.exp(A);
-    lines=['ExpReg','y=a*b^x','a='+fmtNum(a0),'b='+fmtNum(b0)]; if(!isNaN(r)) lines.push('r²='+fmtNum(r*r),'r='+fmtNum(r));
-    eq=[...numToTokens(a0),'*',...numToTokens(b0),'^','X'];
-  } else {
-    const n=X.length; if(n<3) err('DIM MISMATCH');
-    const s=[0,0,0,0,0], t=[0,0,0];
-    X.forEach((x,i)=>{ let p=1; for(let k=0;k<5;k++){ s[k]+=p; if(k<3) t[k]+=p*Y[i]; p*=x; } });
-    const inv=matInv({m:[[s[4],s[3],s[2]],[s[3],s[2],s[1]],[s[2],s[1],s[0]]]});
-    const [A,B,C]=matMul(inv,{m:[[t[2]],[t[1]],[t[0]]]}).m.map(r=>r[0]);
-    const my=t[0]/n; let ssr=0,sst=0; X.forEach((x,i)=>{ const f=A*x*x+B*x+C; ssr+=(Y[i]-f)**2; sst+=(Y[i]-my)**2; });
-    lines=['QuadReg','y=ax²+bx+c','a='+fmtNum(A),'b='+fmtNum(B),'c='+fmtNum(C)]; if(sst>0) lines.push('R²='+fmtNum(1-ssr/sst));
-    eq=[...numToTokens(A),'X','²','+',...numToTokens(B),'X','+',...numToTokens(C)];
+  let w=X.map(()=>1), period=null;
+  if(args.length>2){ if(kind==='sin') period=num(args[2]); else w=freqList(args[2],X.length); }
+  const keep=w.map(v=>v>0); X=X.filter((_,i)=>keep[i]); Y=Y.filter((_,i)=>keep[i]); w=w.filter((_,i)=>keep[i]);
+  const lin=(xs,ys)=>{ const c=polyfit(xs,ys,w,1); return {slope:c[1],icpt:c[0],r:wCorr(xs,ys,w)}; };
+  const withR=(v,r)=>Object.assign(v,{'r²':r*r,r});
+  const lines=[REGS[kind]]; let vals, eq;
+  switch(kind){
+    case 'lin':{ const f=lin(X,Y); vals=withR({a:f.slope,b:f.icpt},f.r); lines.push('y=ax+b'); eq=[...numToTokens(f.slope),'X','+',...numToTokens(f.icpt)]; break; }
+    case 'lin2':{ const f=lin(X,Y); vals=withR({a:f.icpt,b:f.slope},f.r); lines.push('y=a+bx'); eq=[...numToTokens(f.icpt),'+',...numToTokens(f.slope),'X']; break; }
+    case 'medmed':{ const Fq=w.every(v=>v===1)?null:w, ex=expandFreq(X,Fq), ey=expandFreq(Y,Fq); if(!ex) err('DOMAIN');
+      const f=medMed(ex,ey); vals={a:f.a,b:f.b}; lines.push('y=ax+b'); eq=[...numToTokens(f.a),'X','+',...numToTokens(f.b)]; break; }
+    case 'quad': case 'cubic': case 'quart':{
+      const deg={quad:2,cubic:3,quart:4}[kind], c=polyfit(X,Y,w,deg), f=x=>c.reduce((s,ck,k)=>s+ck*Math.pow(x,k),0);
+      vals={}; c.slice().reverse().forEach((v,i)=>{ vals['abcde'[i]]=v; });
+      let sw=0,sy=0; Y.forEach((y,i)=>{ sw+=w[i]; sy+=w[i]*y; }); let sse=0,sst=0;
+      X.forEach((x,i)=>{ sse+=w[i]*(Y[i]-f(x))**2; sst+=w[i]*(Y[i]-sy/sw)**2; });
+      if(sst>0) vals['R²']=1-sse/sst;
+      lines.push(['y=ax²+bx+c','y=ax³+bx²+cx+d','y=ax⁴+bx³+…+e'][deg-2]); eq=polyTokens(c); break; }
+    case 'ln':{ if(X.some(x=>x<=0)) err('DOMAIN'); const f=lin(X.map(Math.log),Y); vals=withR({a:f.icpt,b:f.slope},f.r);
+      lines.push('y=a+b ln x'); eq=[...numToTokens(f.icpt),'+',...numToTokens(f.slope),'ln(','X',')']; break; }
+    case 'exp':{ if(Y.some(y=>y<=0)) err('DOMAIN'); const f=lin(X,Y.map(Math.log)), A=Math.exp(f.icpt), B=Math.exp(f.slope);
+      vals=withR({a:A,b:B},f.r); lines.push('y=a*b^x'); eq=[...numToTokens(A),'*',...numToTokens(B),'^','X']; break; }
+    case 'pwr':{ if(X.some(x=>x<=0)||Y.some(y=>y<=0)) err('DOMAIN'); const f=lin(X.map(Math.log),Y.map(Math.log)), A=Math.exp(f.icpt);
+      vals=withR({a:A,b:f.slope},f.r); lines.push('y=a*x^b'); eq=[...numToTokens(A),'*','X','^','(',...numToTokens(f.slope),')']; break; }
+    case 'logistic':{ const p=logisticFit(X,Y,w); vals={a:p[0],b:p[1],c:p[2]}; lines.push('y=c/(1+ae^(-bx))');
+      eq=[...numToTokens(p[2]),'/','(','1','+',...numToTokens(p[0]),'e^(','neg',...numToTokens(p[1]),'X',')',')']; break; }
+    case 'sin':{ const p=sinFit(X,Y,period); vals={a:p[0],b:p[1],c:p[2],d:p[3]}; lines.push('y=a*sin(bx+c)+d');
+      eq=[...numToTokens(p[0]),'sin(','(',...numToTokens(p[1]),'X','+',...numToTokens(p[2]),')','rad',')','+',...numToTokens(p[3])]; break; }
   }
-  if(yv){ const i=+yv[1]-1; S.yf[i]=eq; S.yon[i]=true; lines.push('→'+disp(yv)); }
+  Object.entries(vals).forEach(([k,v])=>{ if(isFinite(v)) lines.push(statLine(k,v)); });
+  setStat({...vals,RegEQ:eq},REG_KEYS);
+  if(yv){ const i=+yv[1]-1; S.yf[i]=eq.slice(); S.yon[i]=true; lines.push('RegEQ→'+disp(yv)); }
   return {info:lines};
 }
+function anova(args){
+  if(args.length<2||args.length>20) err('ARGUMENT');
+  const G=args.map(listOf); let N=0,tot=0; G.forEach(g=>{ N+=g.length; g.forEach(x=>{ tot+=x; }); });
+  const M=tot/N, k=G.length; let ssb=0,ssw=0;
+  G.forEach(g=>{ const m=g.reduce((s,x)=>s+x,0)/g.length; ssb+=g.length*(m-M)**2; g.forEach(x=>{ ssw+=(x-m)**2; }); });
+  const dfb=k-1, dfw=N-k; if(dfw<1) err('DIM MISMATCH');
+  const msb=ssb/dfb, msw=ssw/dfw, F=msw>0?msb/msw:NaN, p=isFinite(F)?fUp(F,dfb,dfw):NaN;
+  setStat({F,p,df:dfb,Sxp:Math.sqrt(msw)},TEST_KEYS);
+  return {info:['One-way ANOVA',statLine('F',F),statLine('p',p),'Factor',' '+statLine('df',dfb),' '+statLine('SS',ssb),' '+statLine('MS',msb),
+    'Error',' '+statLine('df',dfw),' '+statLine('SS',ssw),' '+statLine('MS',msw),statLine('Sxp',Math.sqrt(msw))]};
+}
 
+/* ---- hypothesis tests and confidence intervals (input screens under STAT ▶ TESTS) ---- */
+const defTP=()=>({inpt:'data',alt:'ne',pooled:'no',mu0:0,sig:1,xbar:0,sx:1,n:30,sig1:1,sig2:1,xbar1:0,sx1:1,n1:30,xbar2:0,sx2:1,n2:30,
+  p0:.5,x:0,x1:0,x2:0,C:.95,L:'L1',F:'1',La:'L1',Lb:'L2',Fa:'1',Fb:'1',Xl:'L1',Yl:'L2',obs:'A',exp:'B',gO:'L1',gE:'L2',df:1});
+const LCH=['L1','L2','L3','L4','L5','L6'].map(x=>[disp(x),x]);
+const FCH=[['1','1'],...LCH];
+const MCH=[['[A]','A'],['[B]','B'],['[C]','C']];
+const chk_={posInt:v=>{ if(!Number.isInteger(v)||v<1) err('DOMAIN'); },nonneg:v=>{ if(!Number.isInteger(v)||v<0) err('DOMAIN'); },
+  pos:v=>{ if(!(v>0)) err('DOMAIN'); },prob:v=>{ if(!(v>0&&v<1)) err('DOMAIN'); },C:v=>{ if(!(v>0&&v<100)||v===1) err('DOMAIN'); }};
+const tpNum=(label,key,check)=>({label,get:()=>S.tp[key],set:v=>{ if(check) check(v); S.tp[key]=v; }});
+const tpCh=(label,key,choices)=>({label,choices,get:()=>S.tp[key],set:v=>{ S.tp[key]=v; }});
+const altRow=(lhs,rhs)=>tpCh(lhs,'alt',[['≠'+rhs,'ne'],['<'+rhs,'lt'],['>'+rhs,'gt']]);
+const inptRow=()=>tpCh('Inpt','inpt',[['Data','data'],['Stats','stats']]);
+const cRow=()=>tpNum('C-Level','C',chk_.C);
+const pooledRow=()=>tpCh('Pooled','pooled',[['No','no'],['Yes','yes']]);
+const isData=()=>S.tp.inpt==='data';
+const lvl=()=>S.tp.C>1?S.tp.C/100:S.tp.C;
+function sample(L,F){ const X=resolveList({name:L}); return wStats(X,F==='1'?null:freqList({name:F},X.length)); }
+function one(){ const P=S.tp; if(isData()){ const s=sample(P.L,P.F); return {m:s.mean,sx:s.sx,n:s.n,data:true}; } return {m:P.xbar,sx:P.sx,n:P.n,data:false}; }
+function two(){ const P=S.tp;
+  if(isData()){ const a=sample(P.La,P.Fa), b=sample(P.Lb,P.Fb); return {m1:a.mean,s1:a.sx,n1:a.n,m2:b.mean,s2:b.sx,n2:b.n}; }
+  return {m1:P.xbar1,s1:P.sx1,n1:P.n1,m2:P.xbar2,s2:P.sx2,n2:P.n2}; }
+function twoT(d){
+  const v1=d.s1**2/d.n1, v2=d.s2**2/d.n2;
+  if(d.n1<2||d.n2<2||!(v1+v2>0)) err('DOMAIN');
+  if(S.tp.pooled==='yes'){ const sp=Math.sqrt(((d.n1-1)*d.s1**2+(d.n2-1)*d.s2**2)/(d.n1+d.n2-2)); return {se:sp*Math.sqrt(1/d.n1+1/d.n2),df:d.n1+d.n2-2,sp}; }
+  return {se:Math.sqrt(v1+v2),df:(v1+v2)**2/(v1*v1/(d.n1-1)+v2*v2/(d.n2-1)),sp:null};
+}
+const iv=(lo,hi)=>'('+fmtNum(lo)+','+fmtNum(hi)+')';
+const dataRows1=(statsRows)=>isData()?[tpCh('List','L',LCH),tpCh('Freq','F',FCH)]:statsRows;
+const dataRows2=(statsRows)=>isData()?[tpCh('List1','La',LCH),tpCh('List2','Lb',LCH),tpCh('Freq1','Fa',FCH),tpCh('Freq2','Fb',FCH)]:statsRows;
+function linRegT(){
+  const P=S.tp, X=resolveList({name:P.Xl}), Y=resolveList({name:P.Yl}); if(X.length!==Y.length) err('DIM MISMATCH');
+  const w=P.F==='1'?X.map(()=>1):freqList({name:P.F},X.length);
+  const c=polyfit(X,Y,w,1), a=c[0], b=c[1]; let n=0,sx=0; X.forEach((x,i)=>{ n+=w[i]; sx+=w[i]*x; });
+  const mx=sx/n; let sxx=0,sse=0; X.forEach((x,i)=>{ sxx+=w[i]*(x-mx)**2; sse+=w[i]*(Y[i]-a-b*x)**2; });
+  const df=n-2; if(df<1) err('DIM MISMATCH');
+  const s=Math.sqrt(sse/df), seb=s/Math.sqrt(sxx), r=wCorr(X,Y,w);
+  return {a,b,s,seb,df,r,eq:[...numToTokens(a),'+',...numToTokens(b),'X']};
+}
+const TESTS={
+  ztest:{title:'Z-Test',rows:()=>[inptRow(),tpNum('μ₀','mu0'),tpNum('σ','sig',chk_.pos),...dataRows1([tpNum('x̄','xbar'),tpNum('n','n',chk_.pos)]),altRow('μ','μ₀')],
+    run:()=>{ const P=S.tp, d=one(); if(!(P.sig>0)) err('DOMAIN'); const z=(d.m-P.mu0)/(P.sig/Math.sqrt(d.n)), p=pZ(z,P.alt);
+      setStat({z,p,'x̄':d.m,n:d.n,Sx:d.sx},TEST_KEYS);
+      return ['Z-Test','μ'+ALT[P.alt]+fmtNum(P.mu0),statLine('z',z),statLine('p',p),statLine('x̄',d.m),...(d.data?[statLine('Sx',d.sx)]:[]),statLine('n',d.n)]; }},
+  ttest:{title:'T-Test',rows:()=>[inptRow(),tpNum('μ₀','mu0'),...dataRows1([tpNum('x̄','xbar'),tpNum('Sx','sx',chk_.pos),tpNum('n','n',chk_.posInt)]),altRow('μ','μ₀')],
+    run:()=>{ const P=S.tp, d=one(); if(!(d.n>1)||!(d.sx>0)) err('DOMAIN'); const df=d.n-1, t=(d.m-P.mu0)/(d.sx/Math.sqrt(d.n)), p=pT(t,df,P.alt);
+      setStat({t,p,df,'x̄':d.m,Sx:d.sx,n:d.n},TEST_KEYS);
+      return ['T-Test','μ'+ALT[P.alt]+fmtNum(P.mu0),statLine('t',t),statLine('p',p),statLine('df',df),statLine('x̄',d.m),statLine('Sx',d.sx),statLine('n',d.n)]; }},
+  z2test:{title:'2-SampZTest',rows:()=>[inptRow(),tpNum('σ₁','sig1',chk_.pos),tpNum('σ₂','sig2',chk_.pos),...dataRows2([tpNum('x̄₁','xbar1'),tpNum('n₁','n1',chk_.pos),tpNum('x̄₂','xbar2'),tpNum('n₂','n2',chk_.pos)]),altRow('μ₁','μ₂')],
+    run:()=>{ const P=S.tp, d=two(); const z=(d.m1-d.m2)/Math.sqrt(P.sig1**2/d.n1+P.sig2**2/d.n2), p=pZ(z,P.alt);
+      setStat({z,p,'x̄₁':d.m1,'x̄₂':d.m2,'n₁':d.n1,'n₂':d.n2},TEST_KEYS);
+      return ['2-SampZTest','μ₁'+ALT[P.alt]+'μ₂',statLine('z',z),statLine('p',p),statLine('x̄₁',d.m1),statLine('x̄₂',d.m2),...(isData()?[statLine('Sx₁',d.s1),statLine('Sx₂',d.s2)]:[]),statLine('n₁',d.n1),statLine('n₂',d.n2)]; }},
+  t2test:{title:'2-SampTTest',rows:()=>[inptRow(),...dataRows2([tpNum('x̄₁','xbar1'),tpNum('Sx₁','sx1',chk_.pos),tpNum('n₁','n1',chk_.posInt),tpNum('x̄₂','xbar2'),tpNum('Sx₂','sx2',chk_.pos),tpNum('n₂','n2',chk_.posInt)]),altRow('μ₁','μ₂'),pooledRow()],
+    run:()=>{ const P=S.tp, d=two(), T=twoT(d), t=(d.m1-d.m2)/T.se, p=pT(t,T.df,P.alt);
+      setStat({t,p,df:T.df,'x̄₁':d.m1,'x̄₂':d.m2,'Sx₁':d.s1,'Sx₂':d.s2,'n₁':d.n1,'n₂':d.n2,...(T.sp?{Sxp:T.sp}:{})},TEST_KEYS);
+      return ['2-SampTTest','μ₁'+ALT[P.alt]+'μ₂',statLine('t',t),statLine('p',p),statLine('df',T.df),statLine('x̄₁',d.m1),statLine('x̄₂',d.m2),statLine('Sx₁',d.s1),statLine('Sx₂',d.s2),...(T.sp?[statLine('Sxp',T.sp)]:[]),statLine('n₁',d.n1),statLine('n₂',d.n2)]; }},
+  p1test:{title:'1-PropZTest',rows:()=>[tpNum('p₀','p0',chk_.prob),tpNum('x','x',chk_.nonneg),tpNum('n','n',chk_.posInt),altRow('prop','p₀')],
+    run:()=>{ const P=S.tp; if(P.x>P.n) err('DOMAIN'); const ph=P.x/P.n, z=(ph-P.p0)/Math.sqrt(P.p0*(1-P.p0)/P.n), p=pZ(z,P.alt);
+      setStat({z,p,'p̂':ph,n:P.n},TEST_KEYS);
+      return ['1-PropZTest','prop'+ALT[P.alt]+fmtNum(P.p0),statLine('z',z),statLine('p',p),statLine('p̂',ph),statLine('n',P.n)]; }},
+  p2test:{title:'2-PropZTest',rows:()=>[tpNum('x₁','x1',chk_.nonneg),tpNum('n₁','n1',chk_.posInt),tpNum('x₂','x2',chk_.nonneg),tpNum('n₂','n2',chk_.posInt),altRow('p₁','p₂')],
+    run:()=>{ const P=S.tp; if(P.x1>P.n1||P.x2>P.n2) err('DOMAIN'); const p1=P.x1/P.n1, p2=P.x2/P.n2, ph=(P.x1+P.x2)/(P.n1+P.n2);
+      const se=Math.sqrt(ph*(1-ph)*(1/P.n1+1/P.n2)); if(!(se>0)) err('DOMAIN'); const z=(p1-p2)/se, p=pZ(z,P.alt);
+      setStat({z,p,'p̂₁':p1,'p̂₂':p2,'p̂':ph,'n₁':P.n1,'n₂':P.n2},TEST_KEYS);
+      return ['2-PropZTest','p₁'+ALT[P.alt]+'p₂',statLine('z',z),statLine('p',p),statLine('p̂₁',p1),statLine('p̂₂',p2),statLine('p̂',ph),statLine('n₁',P.n1),statLine('n₂',P.n2)]; }},
+  zint:{title:'ZInterval',rows:()=>[inptRow(),tpNum('σ','sig',chk_.pos),...dataRows1([tpNum('x̄','xbar'),tpNum('n','n',chk_.pos)]),cRow()],
+    run:()=>{ const P=S.tp, d=one(), me=invPhi((1+lvl())/2)*P.sig/Math.sqrt(d.n);
+      setStat({lower:d.m-me,upper:d.m+me,'x̄':d.m,n:d.n,Sx:d.sx},TEST_KEYS);
+      return ['ZInterval',iv(d.m-me,d.m+me),statLine('x̄',d.m),...(d.data?[statLine('Sx',d.sx)]:[]),statLine('n',d.n)]; }},
+  tint:{title:'TInterval',rows:()=>[inptRow(),...dataRows1([tpNum('x̄','xbar'),tpNum('Sx','sx',chk_.pos),tpNum('n','n',chk_.posInt)]),cRow()],
+    run:()=>{ const d=one(); if(!(d.n>1)) err('DOMAIN'); const df=d.n-1, me=invT((1+lvl())/2,df)*d.sx/Math.sqrt(d.n);
+      setStat({lower:d.m-me,upper:d.m+me,'x̄':d.m,df,Sx:d.sx,n:d.n},TEST_KEYS);
+      return ['TInterval',iv(d.m-me,d.m+me),statLine('x̄',d.m),statLine('df',df),statLine('Sx',d.sx),statLine('n',d.n)]; }},
+  z2int:{title:'2-SampZInt',rows:()=>[inptRow(),tpNum('σ₁','sig1',chk_.pos),tpNum('σ₂','sig2',chk_.pos),...dataRows2([tpNum('x̄₁','xbar1'),tpNum('n₁','n1',chk_.pos),tpNum('x̄₂','xbar2'),tpNum('n₂','n2',chk_.pos)]),cRow()],
+    run:()=>{ const P=S.tp, d=two(), diff=d.m1-d.m2, me=invPhi((1+lvl())/2)*Math.sqrt(P.sig1**2/d.n1+P.sig2**2/d.n2);
+      setStat({lower:diff-me,upper:diff+me,'x̄₁':d.m1,'x̄₂':d.m2,'n₁':d.n1,'n₂':d.n2},TEST_KEYS);
+      return ['2-SampZInt',iv(diff-me,diff+me),statLine('x̄₁',d.m1),statLine('x̄₂',d.m2),statLine('n₁',d.n1),statLine('n₂',d.n2)]; }},
+  t2int:{title:'2-SampTInt',rows:()=>[inptRow(),...dataRows2([tpNum('x̄₁','xbar1'),tpNum('Sx₁','sx1',chk_.pos),tpNum('n₁','n1',chk_.posInt),tpNum('x̄₂','xbar2'),tpNum('Sx₂','sx2',chk_.pos),tpNum('n₂','n2',chk_.posInt)]),cRow(),pooledRow()],
+    run:()=>{ const d=two(), T=twoT(d), diff=d.m1-d.m2, me=invT((1+lvl())/2,T.df)*T.se;
+      setStat({lower:diff-me,upper:diff+me,df:T.df,'x̄₁':d.m1,'x̄₂':d.m2,'Sx₁':d.s1,'Sx₂':d.s2,'n₁':d.n1,'n₂':d.n2,...(T.sp?{Sxp:T.sp}:{})},TEST_KEYS);
+      return ['2-SampTInt',iv(diff-me,diff+me),statLine('df',T.df),statLine('x̄₁',d.m1),statLine('x̄₂',d.m2),statLine('Sx₁',d.s1),statLine('Sx₂',d.s2),...(T.sp?[statLine('Sxp',T.sp)]:[]),statLine('n₁',d.n1),statLine('n₂',d.n2)]; }},
+  p1int:{title:'1-PropZInt',rows:()=>[tpNum('x','x',chk_.nonneg),tpNum('n','n',chk_.posInt),cRow()],
+    run:()=>{ const P=S.tp; if(P.x>P.n) err('DOMAIN'); const ph=P.x/P.n, me=invPhi((1+lvl())/2)*Math.sqrt(ph*(1-ph)/P.n);
+      setStat({lower:ph-me,upper:ph+me,'p̂':ph,n:P.n},TEST_KEYS);
+      return ['1-PropZInt',iv(ph-me,ph+me),statLine('p̂',ph),statLine('n',P.n)]; }},
+  p2int:{title:'2-PropZInt',rows:()=>[tpNum('x₁','x1',chk_.nonneg),tpNum('n₁','n1',chk_.posInt),tpNum('x₂','x2',chk_.nonneg),tpNum('n₂','n2',chk_.posInt),cRow()],
+    run:()=>{ const P=S.tp; if(P.x1>P.n1||P.x2>P.n2) err('DOMAIN'); const p1=P.x1/P.n1, p2=P.x2/P.n2, diff=p1-p2;
+      const me=invPhi((1+lvl())/2)*Math.sqrt(p1*(1-p1)/P.n1+p2*(1-p2)/P.n2);
+      setStat({lower:diff-me,upper:diff+me,'p̂₁':p1,'p̂₂':p2,'n₁':P.n1,'n₂':P.n2},TEST_KEYS);
+      return ['2-PropZInt',iv(diff-me,diff+me),statLine('p̂₁',p1),statLine('p̂₂',p2),statLine('n₁',P.n1),statLine('n₂',P.n2)]; }},
+  chi2:{title:'χ²-Test',rows:()=>[tpCh('Observed','obs',MCH),tpCh('Expected','exp',MCH)],
+    run:()=>{ const P=S.tp, O=S.mats[P.obs]; if(!O) err('UNDEFINED'); const r=O.length, c=O[0].length; if(r<2&&c<2) err('INVALID DIM');
+      const rs=O.map(row=>row.reduce((s,x)=>s+x,0)), cs=O[0].map((_,j)=>O.reduce((s,row)=>s+row[j],0)), N=rs.reduce((s,x)=>s+x,0);
+      if(O.some(row=>row.some(x=>x<0))||!(N>0)) err('DOMAIN');
+      const E=O.map((row,i)=>row.map((_,j)=>rs[i]*cs[j]/N)); if(E.some(row=>row.some(x=>!(x>0)))) err('DOMAIN');
+      let x2=0; O.forEach((row,i)=>row.forEach((o,j)=>{ x2+=(o-E[i][j])**2/E[i][j]; }));
+      const df=Math.max(1,(r-1)*(c-1)), p=chiUp(x2,df); S.mats[P.exp]=E;
+      setStat({'χ²':x2,p,df},TEST_KEYS);
+      return ['χ²-Test',statLine('χ²',x2),statLine('p',p),statLine('df',df),'Expected→['+P.exp+']']; }},
+  gof:{title:'χ²GOF-Test',rows:()=>[tpCh('Observed','gO',LCH),tpCh('Expected','gE',LCH),tpNum('df','df',chk_.posInt)],
+    run:()=>{ const P=S.tp, O=resolveList({name:P.gO}), E=resolveList({name:P.gE}); if(O.length!==E.length) err('DIM MISMATCH');
+      if(E.some(e=>!(e>0))) err('DOMAIN'); let x2=0; const cn=O.map((o,i)=>(o-E[i])**2/E[i]); cn.forEach(v=>{ x2+=v; });
+      const p=chiUp(x2,P.df); setStat({'χ²':x2,p,df:P.df},TEST_KEYS);
+      return ['χ²GOF-Test',statLine('χ²',x2),statLine('p',p),statLine('df',P.df),'CNTRB={'+cn.map(fmtNum).join(' ')+'}']; }},
+  f2test:{title:'2-SampFTest',rows:()=>[inptRow(),...dataRows2([tpNum('Sx₁','sx1',chk_.pos),tpNum('n₁','n1',chk_.posInt),tpNum('Sx₂','sx2',chk_.pos),tpNum('n₂','n2',chk_.posInt)]),altRow('σ₁','σ₂')],
+    run:()=>{ const P=S.tp, d=two(); if(d.n1<2||d.n2<2||!(d.s1>0&&d.s2>0)) err('DOMAIN');
+      const F=d.s1**2/d.s2**2, d1=d.n1-1, d2=d.n2-1, p=pF(F,d1,d2,P.alt);
+      setStat({F,p,'Sx₁':d.s1,'Sx₂':d.s2,'n₁':d.n1,'n₂':d.n2,...(isData()?{'x̄₁':d.m1,'x̄₂':d.m2}:{})},TEST_KEYS);
+      return ['2-SampFTest','σ₁'+ALT[P.alt]+'σ₂',statLine('F',F),statLine('p',p),statLine('Sx₁',d.s1),statLine('Sx₂',d.s2),...(isData()?[statLine('x̄₁',d.m1),statLine('x̄₂',d.m2)]:[]),statLine('n₁',d.n1),statLine('n₂',d.n2)]; }},
+  lrtt:{title:'LinRegTTest',rows:()=>[tpCh('Xlist','Xl',LCH),tpCh('Ylist','Yl',LCH),tpCh('Freq','F',FCH),altRow('β&ρ','0')],
+    run:()=>{ const P=S.tp, R=linRegT(), t=R.b/R.seb, p=pT(t,R.df,P.alt);
+      setStat({t,p,df:R.df,s:R.s},TEST_KEYS); setStat({a:R.a,b:R.b,r:R.r,'r²':R.r*R.r,RegEQ:R.eq},REG_KEYS);
+      return ['LinRegTTest','y=a+bx','β&ρ'+ALT[P.alt]+'0',statLine('t',t),statLine('p',p),statLine('df',R.df),statLine('a',R.a),statLine('b',R.b),statLine('s',R.s),statLine('r²',R.r*R.r),statLine('r',R.r)]; }},
+  lrti:{title:'LinRegTInt',rows:()=>[tpCh('Xlist','Xl',LCH),tpCh('Ylist','Yl',LCH),tpCh('Freq','F',FCH),cRow()],
+    run:()=>{ const R=linRegT(), me=invT((1+lvl())/2,R.df)*R.seb;
+      setStat({lower:R.b-me,upper:R.b+me,df:R.df,s:R.s},TEST_KEYS); setStat({a:R.a,b:R.b,r:R.r,'r²':R.r*R.r,RegEQ:R.eq},REG_KEYS);
+      return ['LinRegTInt','y=a+bx',iv(R.b-me,R.b+me),statLine('b',R.b),statLine('df',R.df),statLine('s',R.s),statLine('a',R.a),statLine('r²',R.r*R.r),statLine('r',R.r)]; }},
+};
+const TEST_ORDER=['ztest','ttest','z2test','t2test','p1test','p2test','zint','tint','z2int','t2int','p1int','p2int','chi2','gof','f2test','lrtt','lrti'];
+function openTest(k){
+  const T=TESTS[k];
+  const build=()=>[...T.rows(),{label:'Calculate',action:()=>{
+    try{ S.info={lines:T.run(),top:0,ret:'form'}; S.screen='info'; }
+    catch(e){ if(!(e instanceof TIError)) throw e; showError(e.code,'form'); }
+  }}];
+  openForm(T.title,build(),{build});
+}
+
+/* ---- stat plots ---- */
+const defPlots=()=>[0,1,2].map(()=>({on:false,type:'scatter',x:'L1',y:'L2',f:'1',mark:'□'}));
+const PLOT_TYPES=[['Scatter','scatter'],['xyLine','xyline'],['Histogram','hist'],['ModBoxplot','mbox'],['Boxplot','box']];
+function openPlotEd(k){
+  const pc=(label,key,choices)=>({label,choices,get:()=>S.plots[k][key],set:v=>{ S.plots[k][key]=v; }});
+  const build=()=>{ const P=S.plots[k], xy=P.type==='scatter'||P.type==='xyline';
+    return [pc('Plot'+(k+1),'on',[['On',true],['Off',false]]),pc('Type','type',PLOT_TYPES),pc(xy?'Xlist':'Data','x',LCH),
+      ...(xy?[pc('Ylist','y',LCH)]:[pc('Freq','f',FCH)]),...(P.type==='hist'||P.type==='box'?[]:[pc('Mark','mark',[['□','□'],['+','+'],['·','·']])])]; };
+  openForm('STAT PLOT '+(k+1),build(),{build});
+}
+function plotVals(P){
+  const X=S.lists[P.x]||[];
+  if(P.type==='scatter'||P.type==='xyline'){ const Y=S.lists[P.y]||[]; const n=Math.min(X.length,Y.length); return {X:X.slice(0,n),Y:Y.slice(0,n)}; }
+  const F=P.f==='1'?null:(S.lists[P.f]||[]);
+  if(F&&F.length!==X.length) return {X:[],F:null};
+  return {X,F};
+}
+const niceStep=r=>{ if(!(r>0)) return 1; const e=Math.pow(10,Math.floor(Math.log10(r))), m=r/e; return (m<1.5?1:m<3?2:m<7?5:10)*e; };
+function zoomStat(){
+  const xs=[],ys=[]; let hist=null, any=false;
+  S.plots.forEach(P=>{ if(!P.on) return; const v=plotVals(P); if(!v.X.length) return; any=true; xs.push(...v.X);
+    if(v.Y) ys.push(...v.Y); else if(P.type==='hist') hist={P,v}; });
+  if(!any){
+    const X=S.lists.L1, Y=S.lists.L2;
+    if(!X||!X.length||!Y||X.length!==Y.length){ showError('INVALID DIM','home'); return false; }
+    Object.assign(S.plots[0],{on:true,type:'scatter',x:'L1',y:'L2'}); xs.push(...X); ys.push(...Y);
+  }
+  const pad=(lo,hi)=>{ if(lo===hi){ lo-=1; hi+=1; } const p=(hi-lo)*0.1; return [lo-p,hi+p]; };
+  const w=S.win; let [x0,x1]=pad(Math.min(...xs),Math.max(...xs));
+  if(hist){
+    const X=hist.v.X, lo=Math.min(...X), hi=Math.max(...X), k=Math.max(5,Math.min(12,Math.ceil(Math.sqrt(X.length))));
+    const sc=hi>lo?niceStep((hi-lo)/k):1, start=Math.floor(lo/sc)*sc, nb=Math.floor((hi-start)/sc)+1;
+    const cnt={}; X.forEach((x,i)=>{ const b=Math.floor((x-start)/sc+1e-9); cnt[b]=(cnt[b]||0)+(hist.v.F?hist.v.F[i]:1); });
+    const top=Math.max(...Object.values(cnt));
+    x0=Math.min(x0,start); x1=Math.max(x1,start+nb*sc); w.Xscl=sc;
+    if(!ys.length) Object.assign(w,{Ymin:-top*0.25,Ymax:top*1.25,Yscl:niceStep(top/5)});
+  } else w.Xscl=niceStep((x1-x0)/10);
+  if(ys.length){ const [y0,y1]=pad(Math.min(...ys),Math.max(...ys)); Object.assign(w,{Ymin:y0,Ymax:y1,Yscl:niceStep((y1-y0)/10)}); }
+  else if(!hist) Object.assign(w,{Ymin:-10,Ymax:10,Yscl:1});
+  w.Xmin=x0; w.Xmax=x1;
+  return true;
+}
+const tracePlots=()=>S.plots.map((P,i)=>i).filter(i=>{ const P=S.plots[i]; return P.on&&(P.type==='scatter'||P.type==='xyline')&&plotVals(P).X.length; });
+
+const SHADE={
+  norm:{pdf:(x,p)=>normpdf(x,p[0],p[1]),area:(lo,hi,p)=>normInterval((lo-p[0])/p[1],(hi-p[0])/p[1]),range:p=>[p[0]-4*p[1],p[0]+4*p[1]]},
+  t:{pdf:(x,p)=>tpdf(x,p[0]),area:(lo,hi,p)=>hi<=0?tUp(-hi,p[0])-tUp(-lo,p[0]):tUp(lo,p[0])-tUp(hi,p[0]),range:p=>{ const r=Math.min(10,Math.max(4,invT(0.995,p[0]))); return [-r,r]; }},
+  chi:{pdf:(x,p)=>chipdf(x,p[0]),area:(lo,hi,p)=>chiUp(Math.max(0,lo),p[0])-chiUp(hi,p[0]),range:p=>[0,p[0]+5*Math.sqrt(2*p[0])+2]},
+  f:{pdf:(x,p)=>fpdf(x,p[0],p[1]),area:(lo,hi,p)=>fUp(lo,p[0],p[1])-fUp(hi,p[0],p[1]),range:()=>[0,5]},
+};
+function shadeWindow(kind,p){
+  const D=SHADE[kind], [x0,x1]=D.range(p); let top=0;
+  for(let k=1;k<=200;k++){ const v=D.pdf(x0+k*(x1-x0)/200,p); if(isFinite(v)) top=Math.max(top,v); }
+  if(!(top>0)) top=1; top=Math.min(top,5);
+  Object.assign(S.win,{Xmin:x0,Xmax:x1,Xscl:niceStep((x1-x0)/8),Ymin:-top*0.15,Ymax:top*1.3,Yscl:niceStep(top/4)});
+}
 function callFn(name,args){
   const one=()=>{ if(args.length!==1) err('ARGUMENT'); return args[0]; };
   if(F1[name]) return map1(one(),F1[name]);
@@ -730,6 +1125,21 @@ function callFn(name,args){
       return map1(args[1],x=>{ if(name==='poissonpdf(') return poisPmf(mu,x); const top=Math.floor(x+1e-9); if(top>100000) err('DOMAIN'); let s=0; for(let k=0;k<=top;k++) s+=poisPmf(mu,k); return Math.min(1,s); }); }
     case 'geometpdf(': case 'geometcdf(':{ cnt(2,2); const p=prob(n(0)); if(p===0) err('DOMAIN');
       return map1(args[1],x=>{ if(!Number.isInteger(x)||x<1) err('DOMAIN'); return name==='geometpdf('?Math.pow(1-p,x-1)*p:1-Math.pow(1-p,x); }); }
+    case 'tpdf(':{ cnt(2,2); const df=n(1); if(!(df>0)) err('DOMAIN'); return map1(args[0],x=>tpdf(x,df)); }
+    case 'tcdf(':{ cnt(3,3); const df=n(2); if(!(df>0)) err('DOMAIN'); return bin(args[0],args[1],(lo,hi)=>{ if(lo>hi) err('DOMAIN'); return hi<=0?tUp(-hi,df)-tUp(-lo,df):tUp(lo,df)-tUp(hi,df); }); }
+    case 'invT(':{ cnt(2,2); const df=n(1); if(!(df>0)) err('DOMAIN'); return map1(args[0],p=>{ if(!(p>0&&p<1)) err('DOMAIN'); return invT(p,df); }); }
+    case 'χ²pdf(':{ cnt(2,2); const df=n(1); if(!(df>0)) err('DOMAIN'); return map1(args[0],x=>chipdf(x,df)); }
+    case 'χ²cdf(':{ cnt(3,3); const df=n(2); if(!(df>0)) err('DOMAIN'); return bin(args[0],args[1],(lo,hi)=>{ if(lo>hi) err('DOMAIN'); return lo>df?chiUp(lo,df)-chiUp(hi,df):chiLo(hi,df)-chiLo(lo,df); }); }
+    case 'Fpdf(':{ cnt(3,3); const d1=n(1),d2=n(2); if(!(d1>0&&d2>0)) err('DOMAIN'); return map1(args[0],x=>fpdf(x,d1,d2)); }
+    case 'Fcdf(':{ cnt(4,4); const d1=n(2),d2=n(3); if(!(d1>0&&d2>0)) err('DOMAIN'); return bin(args[0],args[1],(lo,hi)=>{ if(lo>hi) err('DOMAIN'); return fUp(lo,d1,d2)-fUp(hi,d1,d2); }); }
+    case 'ShadeNorm(': case 'Shade_t(': case 'Shadeχ²(': case 'ShadeF(':{
+      const kind={'ShadeNorm(':'norm','Shade_t(':'t','Shadeχ²(':'chi','ShadeF(':'f'}[name];
+      const need={norm:[2,4],t:[3,3],chi:[3,3],f:[4,4]}[kind]; cnt(need[0],need[1]);
+      const lo=n(0), hi=n(1); if(lo>hi) err('DOMAIN');
+      const prm=kind==='norm'?[args.length>2?n(2):0,args.length>3?n(3):1]:args.slice(2).map((_,i)=>n(i+2));
+      if(prm.some((v,i)=>(kind!=='norm'||i===1)&&!(v>0))) err('DOMAIN');
+      shadeWindow(kind,prm); S.draws.push({t:'shade',kind,lo,hi,prm}); S._graph=true; return DONE; }
+    case 'ANOVA(': return anova(args);
     /* angles */
     case 'R►Pr(':{ cnt(2,2); return bin(args[0],args[1],(x,y)=>Math.hypot(x,y)); }
     case 'R►Pθ(':{ cnt(2,2); return bin(args[0],args[1],(x,y)=>fromRad(Math.atan2(y,x))); }
@@ -755,22 +1165,32 @@ function cmdArgs(P,names){
   if(!P.atEnd()) err('SYNTAX');
   return a;
 }
+function plotsCmd(a,on){ const ks=a.length?a.map(v=>{ const k=num(v); if(![1,2,3].includes(k)) err('DOMAIN'); return k-1; }):[0,1,2]; ks.forEach(k=>{ S.plots[k].on=on; }); return DONE; }
 const CMD={
   '1-Var Stats ':P=>{ const a=cmdArgs(P,true); const X=resolveList(a.length?a[0]:{name:'L1'});
     let F=null; if(a.length>1){ F=a[1]&&a[1].name?resolveList(a[1]):(isList(a[1])?a[1]:[num(a[1])]); if(F.length!==X.length) err('DIM MISMATCH'); }
     return {info:oneVar(X,F)}; },
-  '2-Var Stats ':P=>{ const a=cmdArgs(P,true); return {info:twoVar(resolveList(a.length>0?a[0]:{name:'L1'}),resolveList(a.length>1?a[1]:{name:'L2'}))}; },
+  '2-Var Stats ':P=>{ const a=cmdArgs(P,true); const X=resolveList(a.length>0?a[0]:{name:'L1'}), Y=resolveList(a.length>1?a[1]:{name:'L2'});
+    return {info:twoVar(X,Y,a.length>2?freqList(a[2],X.length):null)}; },
+  'Med-Med ':P=>regress('medmed',cmdArgs(P,true)),
   'LinReg(ax+b) ':P=>regress('lin',cmdArgs(P,true)),
   'QuadReg ':P=>regress('quad',cmdArgs(P,true)),
+  'CubicReg ':P=>regress('cubic',cmdArgs(P,true)),
+  'QuartReg ':P=>regress('quart',cmdArgs(P,true)),
+  'LinReg(a+bx) ':P=>regress('lin2',cmdArgs(P,true)),
+  'LnReg ':P=>regress('ln',cmdArgs(P,true)),
   'ExpReg ':P=>regress('exp',cmdArgs(P,true)),
+  'PwrReg ':P=>regress('pwr',cmdArgs(P,true)),
+  'Logistic ':P=>regress('logistic',cmdArgs(P,true)),
+  'SinReg ':P=>regress('sin',cmdArgs(P,true)),
   'ClrList ':P=>{ const a=cmdArgs(P,true); if(!a.length) err('ARGUMENT'); a.forEach(x=>{ if(!x||!x.name||!isLvar(x.name)) err('DATA TYPE'); S.lists[x.name]=[]; }); return DONE; },
   'Disp ':P=>{ const a=cmdArgs(P,false); a.forEach(v=>{ checkVal(v); S.history.push({in:'',out:fmtResult(v),left:v&&v.str!==undefined}); }); return DONE; },
   'ClrHome':P=>{ cmdArgs(P); S.history=[]; return DONE; },
   'ClrDraw':P=>{ cmdArgs(P); S.draws=[]; S._graph=true; return DONE; },
   'Horizontal ':P=>{ const a=cmdArgs(P); if(a.length!==1) err('ARGUMENT'); S.draws.push({t:'h',y:num(a[0])}); S._graph=true; return DONE; },
   'Vertical ':P=>{ const a=cmdArgs(P); if(a.length!==1) err('ARGUMENT'); S.draws.push({t:'v',x:num(a[0])}); S._graph=true; return DONE; },
-  'PlotsOn':P=>{ cmdArgs(P); S.splot=true; return DONE; },
-  'PlotsOff':P=>{ cmdArgs(P); S.splot=false; return DONE; },
+  'PlotsOn':P=>plotsCmd(cmdArgs(P),true),
+  'PlotsOff':P=>plotsCmd(cmdArgs(P),false),
 };
 
 /* ================= Y= functions and programs ================= */
@@ -797,7 +1217,7 @@ function runPrgm(name){
 function startsPrimary(k){
   if(k===undefined) return false;
   return /^[0-9.]$/.test(k)||k==='EE'||k==='neg'||k.endsWith('(')||k==='{'||k==='['||k==='π'||k==='econst'||k==='Ans'||k==='i'||
-    isLetter(k)||isLvar(k)||isYv(k)||!!FINV[k]||!!WINV[k]||!!MATV[k]||k==='rand'||k.startsWith('tvm_')||k.startsWith('prgm');
+    isLetter(k)||isLvar(k)||isYv(k)||!!FINV[k]||!!WINV[k]||!!MATV[k]||k==='rand'||k.startsWith('tvm_')||k.startsWith('prgm')||k.startsWith('st:');
 }
 class Parser{
   constructor(t){this.t=t;this.p=0;}
@@ -879,6 +1299,9 @@ class Parser{
     if(k==='econst') return Math.E;
     if(k==='i') err('NONREAL ANS');
     if(k==='Ans'){ const a=S.ans; return isMat(a)?{m:a.m.map(r=>r.slice())}:isList(a)?a.slice():a; }
+    if(k.startsWith('st:')){ const nm=k.slice(3);
+      if(nm==='RegEQ'){ const t=S.stat.RegEQ; if(!t) err('UNDEFINED'); return evaluate(t.slice()); }
+      const v=S.stat[nm]; if(v===undefined) err('UNDEFINED'); return v; }
     if(isLetter(k)) return S.vars[k]??0;
     if(isLvar(k)){ const L=S.lists[k]; if(!L||!L.length) err('INVALID DIM'); return L.slice(); }
     if(isYv(k)){ const i=+k[1]-1;
@@ -962,9 +1385,10 @@ function edInsert(E,tok){
   E.c++;
 }
 function edDel(E){ if(E.c<E.t.length) E.t.splice(E.c,1); else if(E.c>0){ E.t.splice(E.c-1,1); E.c--; } }
+const chars_=s=>s.match(/[\s\S][\u0300-\u036f]*/gu)||[];
 function edChars(E){
   const chars=[]; let cur=-1;
-  E.t.forEach((tk,i)=>{ if(i===E.c) cur=chars.length; for(const ch of disp(tk)) chars.push({ch}); });
+  E.t.forEach((tk,i)=>{ if(i===E.c) cur=chars.length; for(const ch of chars_(disp(tk))) chars.push({ch}); });
   if(cur<0){ cur=chars.length; chars.push({ch:' '}); }
   chars[cur]={...chars[cur],cur:true};
   return {chars,cur};
@@ -983,13 +1407,14 @@ function rclTokens(tok){
   return null;
 }
 function edPaste(E,tok){
+  if(tok==='st:RegEQ'&&!S.rcl){ if(!S.stat.RegEQ) return; S.stat.RegEQ.forEach(x=>edInsert(E,x)); return; }
   if(S.rcl){ S.rcl=false; const t=rclTokens(tok); if(t){ t.forEach(x=>edInsert(E,x)); return; } }
   edInsert(E,tok);
 }
 const AUTO_ANS=new Set(['+','-','*','/','^','²','³','inv','→','!','nPr','nCr','►Frac','►Dec','►DMS','=','≠','>','≥','<','≤','tr','deg','rad']);
 function homeInsert(tok){
   const E=S.ed;
-  if(S.rcl) return edPaste(E,tok);
+  if(S.rcl||tok==='st:RegEQ') return edPaste(E,tok);
   if(!E.t.length&&S.hasAns&&AUTO_ANS.has(tok)){ E.t.push('Ans'); E.c=1; }
   edInsert(E,tok);
   if(tok==='→') S.shift='alpha';
@@ -1036,7 +1461,7 @@ function activeEd(create){
     case 'form': if(!S.form.edit&&create) S.form.edit={t:[],c:0}; return S.form.edit;
     case 'yeq': return S.yEd;
     case 'prgmedit': return S.ped;
-    case 'listed': if(S.led.row<0) return null; if(!S.led.ed&&create) S.led.ed={t:[],c:0}; return S.led.ed;
+    case 'listed': if(!S.led.ed&&create) S.led.ed={t:[],c:0}; return S.led.ed;
     case 'trace': if(!S.trace.inp&&create) S.trace.inp={t:[],c:0}; return S.trace.inp;
   }
   return null;
@@ -1056,15 +1481,12 @@ const CATALOG_TOKENS=['abs(','augment(','bal(','binomcdf(','binompdf(','Circle('
   'e^(','ExpReg ','fPart(','gcd(','geometcdf(','geometpdf(','Horizontal ','identity(','int(','invNorm(','iPart(','irr(','lcm(','Line(','LinReg(ax+b) ','ln(','log(',
   'max(','mean(','median(','min(','nCr','normalcdf(','normalpdf(','npv(','nPr','PlotsOff','PlotsOn','Pmt_Bgn','Pmt_End','poissoncdf(','poissonpdf(','prod(','P►Rx(','P►Ry(',
   'QuadReg ','rand','randInt(','round(','R►Pr(','R►Pθ(','seq(','sin(','sin⁻¹(','SortA(','SortD(','stdDev(','sum(','tan(','tan⁻¹(','tvm_FV','tvm_I%','tvm_N','tvm_Pmt','tvm_PV',
-  'variance(','Vertical ','ΔList(','ΣInt(','ΣPrn(','►DMS','►Dec','►Eff(','►Frac','►Nom(','!','10^(','√(','³√(','1-Var Stats ','2-Var Stats '];
+  'variance(','Vertical ','Med-Med ','CubicReg ','QuartReg ','LinReg(a+bx) ','LnReg ','PwrReg ','Logistic ','SinReg ','ANOVA(','tpdf(','tcdf(','invT(','χ²pdf(','χ²cdf(','Fpdf(','Fcdf(','ShadeNorm(','Shade_t(','Shadeχ²(','ShadeF(','ΔList(','ΣInt(','ΣPrn(','►DMS','►Dec','►Eff(','►Frac','►Nom(','!','10^(','√(','³√(','1-Var Stats ','2-Var Stats '];
 const stdWin=()=>{ S.win=defWin(); };
 function zoomAbout(f){ const w=S.win; let cx=(w.Xmin+w.Xmax)/2, cy=(w.Ymin+w.Ymax)/2;
   if(S.gcur){ cx=w.Xmin+S.gcur.i*(w.Xmax-w.Xmin)/94; cy=w.Ymin+S.gcur.j*(w.Ymax-w.Ymin)/62; }
   const hx=(w.Xmax-w.Xmin)/2*f, hy=(w.Ymax-w.Ymin)/2*f; Object.assign(w,{Xmin:cx-hx,Xmax:cx+hx,Ymin:cy-hy,Ymax:cy+hy}); }
-function zoomStat(){ const X=S.lists.L1, Y=S.lists.L2; if(!X||!Y||!X.length||X.length!==Y.length){ showError('INVALID DIM','home'); return false; }
-  const pad=(lo,hi)=>{ if(lo===hi){ lo-=1; hi+=1; } const p=(hi-lo)*0.1; return [lo-p,hi+p]; };
-  const [x0,x1]=pad(Math.min(...X),Math.max(...X)), [y0,y1]=pad(Math.min(...Y),Math.max(...Y));
-  Object.assign(S.win,{Xmin:x0,Xmax:x1,Ymin:y0,Ymax:y1}); S.splot=true; return true; }
+
 function zoomFit(){ const w=S.win, f=onFns(); let lo=Infinity,hi=-Infinity;
   f.forEach(i=>{ for(let k=0;k<=94;k++){ const y=evalY(i,w.Xmin+k*(w.Xmax-w.Xmin)/94,false); if(isFinite(y)){ lo=Math.min(lo,y); hi=Math.max(hi,y); } } });
   if(!isFinite(lo)) return; if(lo===hi){ lo-=1; hi+=1; } w.Ymin=lo; w.Ymax=hi; }
@@ -1075,19 +1497,27 @@ const MENUS={
     {name:'CALC',items:[['TVM Solver...',()=>openTVM()],...tokItems(['tvm_Pmt','tvm_I%','tvm_PV','tvm_N','tvm_FV','npv(','irr(','bal(','ΣPrn(','ΣInt(','►Nom(','►Eff(','dbd(','Pmt_End','Pmt_Bgn'])]},
     {name:'VARS',items:tokItems(['fN','fI%','fPV','fPMT','fFV','fP/Y','fC/Y'])}]},
   vars:{tabs:[
-    {name:'WINDOW',items:tokItems(['wXmin','wXmax','wXscl','wYmin','wYmax','wYscl'])},
-    {name:'Y-VARS',items:tokItems(['Y1','Y2','Y3','Y4'])},
-    {name:'FIN',items:tokItems(['fN','fI%','fPV','fPMT','fFV','fP/Y','fC/Y'])}]},
+    {name:'VARS',items:[['Window...',()=>openMenu('winvars',0)],['Statistics...',()=>openMenu('statvars',0)],['Finance...',()=>openMenu('finance',1)]]},
+    {name:'Y-VARS',items:tokItems(['Y1','Y2','Y3','Y4'])}]},
+  winvars:{tabs:[{name:'WINDOW',items:tokItems(['wXmin','wXmax','wXscl','wYmin','wYmax','wYscl'])}]},
+  statvars:{tabs:[
+    {name:'XY',items:tokItems(['n','x̄','Sx','σx','ȳ','Sy','σy','minX','maxX','minY','maxY'].map(k=>'st:'+k))},
+    {name:'Σ',items:tokItems(['Σx','Σx²','Σy','Σy²','Σxy'].map(k=>'st:'+k))},
+    {name:'EQ',items:tokItems(['RegEQ','a','b','c','d','e','r','r²','R²'].map(k=>'st:'+k))},
+    {name:'TEST',items:tokItems(['p','z','t','χ²','F','df','p̂','p̂₁','p̂₂','s','x̄₁','x̄₂','Sx₁','Sx₂','Sxp','n₁','n₂','lower','upper'].map(k=>'st:'+k))},
+    {name:'PTS',items:tokItems(['Q₁','Med','Q₃'].map(k=>'st:'+k))}]},
   math:{tabs:[
     {name:'MATH',items:tokItems(['►Frac','►Dec','³','³√(','xroot'])},
     {name:'NUM',items:tokItems(['abs(','round(','iPart(','fPart(','int(','min(','max(','lcm(','gcd('])},
     {name:'PRB',items:tokItems(['rand','nPr','nCr','!','randInt('])}]},
   test:{tabs:[{name:'TEST',items:tokItems(['=','≠','>','≥','<','≤'])}]},
   angle:{tabs:[{name:'ANGLE',items:tokItems(['deg','rad','►DMS','R►Pr(','R►Pθ(','P►Rx(','P►Ry('])}]},
-  distr:{tabs:[{name:'DISTR',items:tokItems(['normalpdf(','normalcdf(','invNorm(','binompdf(','binomcdf(','poissonpdf(','poissoncdf(','geometpdf(','geometcdf('])}]},
+  distr:{tabs:[{name:'DISTR',items:tokItems(['normalpdf(','normalcdf(','invNorm(','invT(','tpdf(','tcdf(','χ²pdf(','χ²cdf(','Fpdf(','Fcdf(','binompdf(','binomcdf(','poissonpdf(','poissoncdf(','geometpdf(','geometcdf('])},
+    {name:'DRAW',items:tokItems(['ShadeNorm(','Shade_t(','Shadeχ²(','ShadeF('])}]},
   stat:{tabs:[
     {name:'EDIT',items:[['Edit...',()=>openListEd()],...tokItems(['SortA(','SortD(','ClrList '])]},
-    {name:'CALC',items:tokItems(['1-Var Stats ','2-Var Stats ','LinReg(ax+b) ','QuadReg ','ExpReg '])}]},
+    {name:'CALC',items:tokItems(['1-Var Stats ','2-Var Stats ','Med-Med ','LinReg(ax+b) ','QuadReg ','CubicReg ','QuartReg ','LinReg(a+bx) ','LnReg ','ExpReg ','PwrReg ','Logistic ','SinReg '])},
+    {name:'TESTS',items:()=>[...TEST_ORDER.map(k=>[TESTS[k].title+'...',()=>openTest(k)]),['ANOVA(','ANOVA(']]}]},
   list:{tabs:[
     {name:'NAMES',items:tokItems(['L1','L2','L3','L4','L5','L6'])},
     {name:'OPS',items:tokItems(['SortA(','SortD(','dim(','seq(','cumSum(','ΔList(','augment('])},
@@ -1106,8 +1536,8 @@ const MENUS={
   calc:{tabs:[{name:'CALCULATE',items:[['value',()=>{ openTrace(); if(S.screen==='trace') S.trace.inp={t:[],c:0}; }],
     ['zero',()=>calcRun('zero')],['minimum',()=>calcRun('minimum')],['maximum',()=>calcRun('maximum')],['intersect',()=>calcRun('intersect')]]}]},
   splot:{tabs:[{name:'STAT PLOTS',items:()=>[
-    ['Plot1 L₁,L₂ '+(S.splot?'On':'Off'),()=>{ S.splot=!S.splot; }],
-    ['PlotsOff',()=>{ S.splot=false; goHome(); }],['PlotsOn',()=>{ S.splot=true; goHome(); }]]}]},
+    ...S.plots.map((P,k)=>['Plot'+(k+1)+' '+(P.on?'On ':'Off ')+{scatter:'Sct',xyline:'xyL',hist:'Hst',mbox:'MBx',box:'Box'}[P.type],()=>openPlotEd(k)]),
+    ['PlotsOff',()=>{ S.plots.forEach(P=>{ P.on=false; }); goHome(); }],['PlotsOn',()=>{ S.plots.forEach(P=>{ P.on=true; }); goHome(); }]]}]},
   draw:{tabs:[{name:'DRAW',items:tokItems(['ClrDraw','Line(','Horizontal ','Vertical ','Circle('])}]},
   prgm:{tabs:[
     {name:'EXEC',items:()=>Object.keys(S.prgms).sort().map(k=>[k,'prgm'+k])},
@@ -1283,8 +1713,18 @@ function formCommit(){
 function formKey(a){
   const F=S.form, n=F.rows.length, row=F.rows[F.row];
   const existing=()=>{ if(!F.edit) F.edit={t:numToTokens(row.get()),c:0}; return F.edit; };
-  if(a.startsWith('T:')){ if(!F.edit) F.edit={t:[],c:0}; edPaste(F.edit,a.slice(2)); return; }
   const to=r=>{ const N=F.rows.length; F.row=(r+N)%N; S.insert=false; if(F.row<F.top) F.top=F.row; if(F.row>=F.top+7) F.top=F.row-6; };
+  if(row.choices||row.action){
+    switch(a){
+      case 'LEFT': case 'RIGHT': if(row.choices){ const cs=row.choices, i=Math.max(0,cs.findIndex(c=>c[1]===row.get()));
+        row.set(cs[(i+(a==='LEFT'?-1:1)+cs.length)%cs.length][1]); if(F.build){ F.rows=F.build(); if(F.row>=F.rows.length) F.row=F.rows.length-1; } } return;
+      case 'ENTER': if(row.action) return row.action(); to(F.row+1); return;
+      case 'DOWN': to(F.row+1); return;
+      case 'UP': to(F.row-1); return;
+    }
+    return;
+  }
+  if(a.startsWith('T:')){ if(!F.edit) F.edit={t:[],c:0}; edPaste(F.edit,a.slice(2)); return; }
   switch(a){
     case 'ENTER': case 'DOWN': if(F.edit&&!formCommit()) return; to(F.row+1); return;
     case 'UP': if(F.edit&&!formCommit()) return; to(F.row-1); return;
@@ -1314,12 +1754,28 @@ function graphKey(a){
 function openTrace(x,label){
   if(!winOK()){ showError('WINDOW RANGE','home'); return; }
   const f=onFns();
-  if(!f.length){ openGraph(); note('Enter a function in Y= to trace it.'); return; }
+  if(!f.length){ const tp=tracePlots(); if(tp.length){ S.trace={plot:tp[0],i:0,inp:null}; S.screen='trace'; S.menu=null; return; } openGraph(); note('Enter a function in Y= or turn on a stat plot to trace it.'); return; }
   const w=S.win, fi=S.trace&&f.includes(S.trace.fi)?S.trace.fi:f[0];
-  S.trace={fi,x:x??w.Xmin+47*(w.Xmax-w.Xmin)/94,label:label||null,inp:null};
+  S.trace={plot:null,fi,x:x??w.Xmin+47*(w.Xmax-w.Xmin)/94,label:label||null,inp:null};
   S.screen='trace'; S.menu=null;
 }
+// ▲/▼ in TRACE step through the Y= functions and the stat plots together
+function traceCycle(d){
+  const T=S.trace, items=[...onFns().map(fi=>({fi})),...tracePlots().map(plot=>({plot}))];
+  if(!items.length) return;
+  const cur=items.findIndex(it=>T.plot!=null?it.plot===T.plot:it.fi===T.fi);
+  const nx=items[((cur<0?0:cur)+d+items.length)%items.length], w=S.win;
+  if(nx.plot!=null){ T.plot=nx.plot; T.i=Math.min(T.i||0,plotVals(S.plots[nx.plot]).X.length-1); }
+  else { T.plot=null; T.fi=nx.fi; if(T.x==null) T.x=w.Xmin+47*(w.Xmax-w.Xmin)/94; }
+  T.label=null;
+}
 function traceKey(a){
+  if(S.trace.plot!=null){ const T=S.trace, tp=tracePlots(); if(!tp.length){ S.screen='graph'; return; } if(!tp.includes(T.plot)) T.plot=tp[0];
+    const n=plotVals(S.plots[T.plot]).X.length;
+    switch(a){ case 'LEFT': T.i=Math.max(0,T.i-1); break; case 'RIGHT': T.i=Math.min(n-1,T.i+1); break;
+      case 'UP': case 'DOWN': traceCycle(a==='UP'?1:-1); return;
+      case 'CLEAR': S.screen='graph'; S.gcur=null; break; }
+    return; }
   const T=S.trace, w=S.win, dx=(w.Xmax-w.Xmin)/94;
   if(T.inp){
     if(a.startsWith('T:')){ edPaste(T.inp,a.slice(2)); return; }
@@ -1341,8 +1797,7 @@ function traceKey(a){
   switch(a){
     case 'LEFT': T.x-=dx; T.label=null; break;
     case 'RIGHT': T.x+=dx; T.label=null; break;
-    case 'UP': T.fi=f[(f.indexOf(T.fi)+1)%f.length]; T.label=null; break;
-    case 'DOWN': T.fi=f[(f.indexOf(T.fi)-1+f.length)%f.length]; T.label=null; break;
+    case 'UP': case 'DOWN': traceCycle(a==='UP'?1:-1); return;
     case 'ENTER':{ const hx=(w.Xmax-w.Xmin)/2; w.Xmin=T.x-hx; w.Xmax=T.x+hx; const y=evalY(T.fi,T.x,false);
       if(isFinite(y)){ const hy=(w.Ymax-w.Ymin)/2; w.Ymin=y-hy; w.Ymax=y+hy; } break; }
     case 'CLEAR': S.screen='graph'; S.gcur=null; return;
@@ -1415,6 +1870,7 @@ function ledCommit(){
   if(!E.t.length){ D.ed=null; return true; }
   try{
     let v=evaluate(E.t.slice()); if(v&&v.frac!==undefined) v=v.frac;
+    if(D.row<0){ if(typeof v==='number') v=[v]; if(!isList(v)) err('DATA TYPE'); S.lists[nm]=v.slice(); D.ed=null; return true; }
     if(typeof v!=='number') err('DATA TYPE'); checkNum(v);
     const L=S.lists[nm]||(S.lists[nm]=[]); if(D.row>L.length) D.row=L.length; L[D.row]=v; D.ed=null; return true;
   }catch(e){ if(!(e instanceof TIError)) throw e; D.ed=null; showError(e.code,'listed'); return false; }
@@ -1422,7 +1878,7 @@ function ledCommit(){
 function ledKey(a){
   const D=S.led, nm=LNAMES[D.col], L=S.lists[nm]||[];
   const fix=()=>{ if(D.row<D.top) D.top=Math.max(0,D.row); if(D.row>=D.top+6) D.top=D.row-5; if(D.col<D.left) D.left=D.col; if(D.col>D.left+2) D.left=D.col-2; };
-  if(a.startsWith('T:')){ if(D.row<0) return; if(!D.ed) D.ed={t:[],c:0}; edPaste(D.ed,a.slice(2)); return; }
+  if(a.startsWith('T:')){ if(!D.ed) D.ed={t:[],c:0}; edPaste(D.ed,a.slice(2)); return; }
   switch(a){
     case 'ENTER': if(D.ed){ if(!ledCommit()) return; D.row++; } else if(D.row<L.length) D.row++; break;
     case 'DOWN': if(D.ed&&!ledCommit()) return; if(D.row<(S.lists[nm]||[]).length) D.row++; break;
@@ -1432,6 +1888,7 @@ function ledKey(a){
       D.col=Math.max(0,Math.min(5,D.col+(a==='LEFT'?-1:1))); D.row=Math.min(D.row,(S.lists[LNAMES[D.col]]||[]).length); break;
     case 'DEL': if(D.ed){ edDel(D.ed); return; } if(D.row>=0&&D.row<L.length) L.splice(D.row,1); break;
     case 'CLEAR': if(D.ed){ D.ed={t:[],c:0}; return; } if(D.row<0) S.lists[nm]=[]; break;
+    case 'INS': if(!D.ed&&D.row>=0&&D.row<=L.length){ if(!S.lists[nm]) S.lists[nm]=[]; S.lists[nm].splice(D.row,0,0); } break;
   }
   fix();
 }
@@ -1475,11 +1932,12 @@ function errKey(a){
   else { S.screen=e.ret; S.err=null; if(e.ret==='home'&&e.tokens) S.ed={t:e.tokens.slice(),c:e.tokens.length}; }
 }
 function infoKey(a){
-  const I=S.info;
+  const I=S.info, n=infoLines().length;
   if(a==='UP') I.top=Math.max(0,I.top-1);
-  else if(a==='DOWN') I.top=Math.min(Math.max(0,I.lines.length-H),I.top+1);
-  else if(a==='ENTER'||a==='CLEAR') goHome();
+  else if(a==='DOWN') I.top=Math.min(Math.max(0,n-H),I.top+1);
+  else if(a==='ENTER'||a==='CLEAR'){ if(I.ret&&S.form){ S.screen=I.ret; S.info=null; } else goHome(); }
 }
+function infoLines(){ const out=[]; S.info.lines.forEach(l=>out.push(...wrap(cellsOf(l)))); return out; }
 function homeKey(a){
   const E=S.ed;
   if(a.startsWith('T:')) return homeInsert(a.slice(2));
@@ -1541,7 +1999,7 @@ function doAction(a){
 function resetAll(){
   Object.assign(S,{screen:'home',shift:null,alock:false,insert:false,ed:{t:[],c:0},history:[],entries:[],entryIdx:-1,ans:0,hasAns:false,
     vars:{},lists:{},tvm:defTVM(),modes:defModes(),contrast:0,menu:null,err:null,tvmRow:0,tvmEdit:null,tvmSolved:null,
-    yf:[[],[],[],[]],yon:[true,true,true,true],yRow:0,yEd:null,win:defWin(),tblset:{start:0,step:1},fmt:defFmt(),splot:false,draws:[],prgms:{},mats:{},
+    yf:[[],[],[],[]],yon:[true,true,true,true],yRow:0,yEd:null,win:defWin(),tblset:{start:0,step:1},fmt:defFmt(),plots:defPlots(),draws:[],prgms:{},mats:{},stat:{},tp:defTP(),
     form:null,gcur:null,trace:null,info:null,ped:null,rcl:false});
   S.history.push({in:'',out:'RAM cleared'});
 }
@@ -1605,9 +2063,19 @@ function tvmModel(){
   L.push(row);
   return L;
 }
+function choiceLine(r,sel){
+  const lab=cellsOf(r.label+':'), cur=r.get(), all=[];
+  r.choices.forEach((c,i)=>{ if(i) all.push(BLANK); cellsOf(c[0]).forEach(x=>all.push({...x,inv:c[1]===cur,fl:sel&&c[1]===cur})); });
+  if(lab.length+all.length<=W) return lab.concat(all);
+  const c=r.choices.find(c=>c[1]===cur)||r.choices[0];
+  return lab.concat(cellsOf(c[0]).map(x=>({...x,inv:true,fl:sel}))).slice(0,W);
+}
 function formModel(){
   const F=S.form, L=[cellsOf(F.title)];
-  for(let k=0;k<7;k++){ const i=F.top+k; if(i>=F.rows.length) break; const r=F.rows[i]; L.push(fieldLine(r.label,F.row===i,F.edit,r.get())); }
+  for(let k=0;k<7;k++){ const i=F.top+k; if(i>=F.rows.length) break; const r=F.rows[i], sel=F.row===i;
+    if(r.action) L.push(cellsOf(r.label).map(c=>({...c,inv:sel,fl:sel})));
+    else if(r.choices) L.push(choiceLine(r,sel));
+    else L.push(fieldLine(r.label,sel,F.edit,r.get())); }
   return L;
 }
 function optsModel(){
@@ -1623,7 +2091,7 @@ function optsModel(){
 }
 function yeqModel(){
   const L=[];
-  L.push(cellsOf('Plot1').map(c=>({...c,inv:S.splot})).concat(cellsOf(S.splot?'  L₁,L₂ on':'')));
+  const hdr=[]; S.plots.forEach((P,k)=>{ if(k) hdr.push(BLANK); cellsOf('Plt'+(k+1)).forEach(c=>hdr.push({...c,inv:P.on})); }); L.push(hdr);
   for(let r=0;r<4;r++){
     const line=[...cellsOf('Y'+SUBS[r]),{ch:'=',inv:S.yon[r],fl:S.yRow===r&&S.yEq}];
     if(S.yRow===r&&!S.yEq){ const {chars:cs,cur}=edChars(S.yEd); const room=W-line.length; line.push(...(cur>=room?cs.slice(cur-room+1):cs)); }
@@ -1656,12 +2124,14 @@ function ledModel(){
     L.push(row(cols.map(c=>{ const v=(S.lists[LNAMES[c]]||[])[i]; return v===undefined?(i===(S.lists[LNAMES[c]]||[]).length&&c===D.col?'':''):fitNum(v,widths[cols.indexOf(c)]); }),i===D.row?cols.indexOf(D.col):-1));
   }
   const nm=disp(LNAMES[D.col]);
-  if(D.row<0) L.push(cellsOf(nm+' ='));
+  if(D.row<0&&D.ed){ const {chars:cs,cur}=edChars(D.ed); const lab=cellsOf(nm+'='); const room=W-lab.length; L.push(lab.concat(cur>=room?cs.slice(cur-room+1):cs).slice(0,W)); }
+  else if(D.row<0) L.push(cellsOf(nm+' ='));
   else if(D.ed){ const {chars:cs,cur}=edChars(D.ed); const lab=cellsOf(nm+'('+(D.row+1)+')='); const room=W-lab.length; L.push(lab.concat(cur>=room?cs.slice(cur-room+1):cs).slice(0,W)); }
   else { const v=(S.lists[LNAMES[D.col]]||[])[D.row]; L.push(cellsOf(nm+'('+(D.row+1)+')='+(v===undefined?'':fmtNum(v))).slice(0,W)); }
   return L;
 }
-function infoModel(){ const I=S.info; return I.lines.slice(I.top,I.top+H).map(s=>cellsOf(s).slice(0,W)); }
+function infoModel(){ const I=S.info, L=infoLines(); if(I.top>Math.max(0,L.length-H)) I.top=Math.max(0,L.length-H);
+  const v=L.slice(I.top,I.top+H); if(L.length>H){ const last=v.length-1; if(I.top+H<L.length) v[last]=v[last].slice(0,W-1).concat(Array(Math.max(0,W-1-v[last].length)).fill(BLANK)).concat([{ch:'↓'}]); } return v; }
 function prgmNameModel(){ return [cellsOf('PROGRAM'),cellsOf('Name='+S.pname).concat([{ch:' ',cur:true}])]; }
 function prgmEdModel(){
   const P=S.ped, logical=[]; let line=[{ch:':'}], curLine=-1;
@@ -1813,19 +2283,49 @@ function drawGraph(){
     }
     ctx.stroke();
   }
-  if(S.splot){ const A=S.lists.L1||[], B=S.lists.L2||[]; for(let i=0;i<Math.min(A.length,B.length);i++){ ctx.strokeRect(X(A[i])-1.8,Y(B[i])-1.8,3.6,3.6); } }
+  const mark=(px,py,m)=>{ if(m==='+'){ ctx.beginPath(); ctx.moveTo(px-2.5,py); ctx.lineTo(px+2.5,py); ctx.moveTo(px,py-2.5); ctx.lineTo(px,py+2.5); ctx.stroke(); }
+    else if(m==='·') ctx.fillRect(px-1,py-1,2,2); else ctx.strokeRect(px-1.8,py-1.8,3.6,3.6); };
   ctx.lineWidth=1;
+  let boxSlot=0;
+  S.plots.forEach(P=>{ if(!P.on) return; const v=plotVals(P); if(!v.X.length) return;
+    if(P.type==='scatter'||P.type==='xyline'){
+      if(P.type==='xyline'){ ctx.beginPath(); v.X.forEach((x,i)=>{ if(i) ctx.lineTo(X(x),Y(v.Y[i])); else ctx.moveTo(X(x),Y(v.Y[i])); }); ctx.stroke(); }
+      v.X.forEach((x,i)=>mark(X(x),Y(v.Y[i]),P.mark));
+    } else if(P.type==='hist'){
+      if(!(w.Xscl>0)||(w.Xmax-w.Xmin)/w.Xscl>200) return;
+      const cnt={}; v.X.forEach((x,i)=>{ const b=Math.floor((x-w.Xmin)/w.Xscl+1e-9); cnt[b]=(cnt[b]||0)+(v.F?v.F[i]:1); });
+      Object.entries(cnt).forEach(([b,c])=>{ const x0=w.Xmin+b*w.Xscl; ctx.globalAlpha=.25; ctx.fillRect(X(x0),Y(c),w.Xscl*sx,Y(0)-Y(c)); ctx.globalAlpha=1; ctx.strokeRect(X(x0),Y(c),w.Xscl*sx,Y(0)-Y(c)); });
+    } else {
+      const e=expandFreq(v.X,v.F); if(!e||!e.length) return; const f=fiveNum(e), yc=24+boxSlot*30, h=9; boxSlot++;
+      let lo=f.min, hi=f.max; const out=[];
+      if(P.type==='mbox'){ const r=1.5*(f.q3-f.q1); const inl=e.filter(x=>x>=f.q1-r&&x<=f.q3+r); lo=Math.min(...inl); hi=Math.max(...inl); e.forEach(x=>{ if(x<f.q1-r||x>f.q3+r) out.push(x); }); }
+      ctx.beginPath(); ctx.moveTo(X(lo),yc); ctx.lineTo(X(f.q1),yc); ctx.moveTo(X(f.q3),yc); ctx.lineTo(X(hi),yc);
+      ctx.moveTo(X(lo),yc-3); ctx.lineTo(X(lo),yc+3); ctx.moveTo(X(hi),yc-3); ctx.lineTo(X(hi),yc+3);
+      ctx.rect(X(f.q1),yc-h/2,X(f.q3)-X(f.q1),h); ctx.moveTo(X(f.med),yc-h/2); ctx.lineTo(X(f.med),yc+h/2); ctx.stroke();
+      out.forEach(x=>mark(X(x),yc,P.mark));
+    } });
+  ctx.lineWidth=1;
+  let shadeNote=null;
   for(const d of S.draws){
     ctx.beginPath();
     if(d.t==='h'){ ctx.moveTo(0,Y(d.y)); ctx.lineTo(GW,Y(d.y)); }
     else if(d.t==='v'){ ctx.moveTo(X(d.x),0); ctx.lineTo(X(d.x),GH); }
     else if(d.t==='l'){ ctx.moveTo(X(d.x1),Y(d.y1)); ctx.lineTo(X(d.x2),Y(d.y2)); }
     else if(d.t==='c'){ ctx.ellipse(X(d.x),Y(d.y),d.r*sx,d.r*sy,0,0,Math.PI*2); }
+    else if(d.t==='shade'){ const D=SHADE[d.kind], a=Math.max(d.lo,w.Xmin), b=Math.min(d.hi,w.Xmax);
+      ctx.globalAlpha=.35; for(let px=Math.ceil(X(a));px<=X(b);px++){ const y=D.pdf(w.Xmin+px/sx,d.prm); if(isFinite(y)) ctx.fillRect(px,Math.max(0,Y(y)),1,Y(0)-Math.max(0,Y(y))); } ctx.globalAlpha=1;
+      let pen=false; for(let px=0;px<=GW;px+=0.5){ const y=D.pdf(w.Xmin+px/sx,d.prm); if(!isFinite(y)){ pen=false; continue; } if(pen) ctx.lineTo(px,Y(y)); else { ctx.moveTo(px,Y(y)); pen=true; } }
+      shadeNote=d; }
     ctx.stroke();
   }
   const text=(s,x,y)=>{ ctx.font='15px VT323, ui-monospace, monospace'; ctx.textBaseline='bottom'; const tw=ctx.measureText(s).width; ctx.fillStyle=bg; ctx.fillRect(x-1,y-13,tw+2,13); ctx.fillStyle=fg; ctx.fillText(s,x,y); };
   const cross=(cx,cy)=>{ ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(cx-4,cy); ctx.lineTo(cx+4,cy); ctx.moveTo(cx,cy-4); ctx.lineTo(cx,cy+4); ctx.stroke(); };
-  if(S.screen==='trace'&&S.trace){
+  if(shadeNote&&S.screen==='graph'){ const d=shadeNote; text('Area='+fitNum(SHADE[d.kind].area(d.lo,d.hi,d.prm),10),2,14); text('low='+fitNum(d.lo,7)+' up='+fitNum(d.hi,7),2,28); }
+  if(S.screen==='trace'&&S.trace&&S.trace.plot!=null){
+    const T=S.trace, P=S.plots[T.plot], v=plotVals(P), i=Math.max(0,Math.min(T.i,v.X.length-1)), px=v.Y?v.X[i]:undefined, py=v.Y?v.Y[i]:undefined;
+    text('P'+(T.plot+1)+':'+disp(P.x)+','+disp(P.y),2,14);
+    if(px!==undefined){ ctx.lineWidth=1.2; ctx.strokeRect(X(px)-2.5,Y(py)-2.5,5,5); cross(X(px),Y(py)); text('X='+fitNum(px,9),2,GH-1); text('Y='+fitNum(py,9),GW/2+4,GH-1); }
+  } else if(S.screen==='trace'&&S.trace){
     const T=S.trace, y=evalY(T.fi,T.x,false);
     text(('Y'+SUBS[T.fi]+'='+S.yf[T.fi].map(disp).join('')).slice(0,30),2,14);
     if(isFinite(y)&&Y(y)>=-2&&Y(y)<=GH+2){ ctx.lineWidth=1.2; ctx.strokeRect(X(T.x)-2.5,Y(y)-2.5,5,5); cross(X(T.x),Y(y)); }
@@ -1871,11 +2371,12 @@ function render(){
   document.getElementById('ledA').classList.toggle('on',S.shift==='alpha'||S.alock);
 }
 const STORE_KEY='razorcalc-state-v1';
-const SAVED=['vars','lists','tvm','modes','ans','hasAns','contrast','tvmSolved','yf','yon','win','tblset','fmt','splot','draws','prgms','mats'];
+const SAVED=['vars','lists','tvm','modes','ans','hasAns','contrast','tvmSolved','yf','yon','win','tblset','fmt','plots','draws','prgms','mats','stat','tp'];
 function save(){
   try{ const d={}; SAVED.forEach(k=>d[k]=S[k]); localStorage.setItem(STORE_KEY,JSON.stringify(d)); }catch(e){}
 }
 function load(){
+  S.plots=defPlots(); S.tp=defTP();
   try{
     const d=JSON.parse(localStorage.getItem(STORE_KEY)||localStorage.getItem('amortix-state-v1')||'null'); if(!d) return;
     if(d.vars) S.vars=d.vars; if(d.lists) S.lists=d.lists; if(d.tvm) S.tvm={...defTVM(),...d.tvm};
@@ -1884,7 +2385,9 @@ function load(){
     if(typeof d.contrast==='number') S.contrast=d.contrast; S.tvmSolved=d.tvmSolved||null;
     if(Array.isArray(d.yf)&&d.yf.length===4) S.yf=d.yf; if(Array.isArray(d.yon)&&d.yon.length===4) S.yon=d.yon;
     if(d.win) S.win={...defWin(),...d.win}; if(d.tblset) S.tblset={start:0,step:1,...d.tblset}; if(d.fmt) S.fmt={...defFmt(),...d.fmt};
-    S.splot=!!d.splot; if(Array.isArray(d.draws)) S.draws=d.draws; if(d.prgms) S.prgms=d.prgms; if(d.mats) S.mats=d.mats;
+    if(Array.isArray(d.plots)&&d.plots.length===3) S.plots=d.plots.map(p=>({...defPlots()[0],...p})); else if(d.splot) S.plots[0].on=true;
+    if(d.stat) S.stat=d.stat; if(d.tp) S.tp={...defTP(),...d.tp};
+    if(Array.isArray(d.draws)) S.draws=d.draws; if(d.prgms) S.prgms=d.prgms; if(d.mats) S.mats=d.mats;
   }catch(e){}
 }
 function flash(id){
@@ -2003,7 +2506,8 @@ function minusOrNeg(){
   return 'sub';
 }
 
-globalThis.__calc={S,evaluate,fmtResult,fmtNum,fitNum,tvmCompute,press,KEYMAP,ARROWS,screenModel,direct,doAction,evalY};
+if(!S.plots) S.plots=defPlots(); if(!S.tp) S.tp=defTP();
+globalThis.__calc={S,evaluate,fmtResult,fmtNum,fitNum,tvmCompute,press,KEYMAP,ARROWS,screenModel,direct,doAction,evalY,TESTS,openTest};
 if(typeof document!=='undefined'){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init(); }
 })();
 </script>
