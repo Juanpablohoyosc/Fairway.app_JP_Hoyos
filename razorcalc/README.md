@@ -2,7 +2,7 @@
 
 A graphing and finance calculator built for student-athletes. It runs entirely in the browser as a single `index.html` with no build step.
 
-**Live site:** https://juanpablohoyosc.github.io/razorcalc/
+**Live site:** https://juanpablohoyosc.github.io/Razorcalc/
 
 ## Features
 
@@ -16,7 +16,7 @@ A graphing and finance calculator built for student-athletes. It runs entirely i
 - **Matrices:** `[A]`–`[C]` with an editor, `det(`, transpose, inverse, `identity(`
 - **Programs and drawing:** short programs with `Disp`; ClrDraw, Line, Horizontal, Vertical, Circle
 - **Other:** MODE (Float/Fix, Sci/Eng, Radian/Degree), angle conversions, RCL, catalog, and keyboard input
-- **Calculator-only view:** turns on automatically on phones; open it anywhere with `#calc`, e.g. `https://juanpablohoyosc.github.io/razorcalc/#calc`
+- **Calculator-only view:** turns on automatically on phones; open it anywhere with `#calc`, e.g. `https://juanpablohoyosc.github.io/Razorcalc/#calc`
 
 Memory is saved in the browser's local storage.
 
